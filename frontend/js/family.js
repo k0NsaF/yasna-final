@@ -7,13 +7,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     if (token) {
         localStorage.setItem("family_token", token);
-        // Очищаем URL для безопасности
         window.history.replaceState({}, document.title, window.location.pathname);
     }
 
+    // Если токена нет, мы никуда не перекидываем, а просто пишем ошибку в консоль и на экран
     if (!localStorage.getItem("family_token")) {
-        alert("Доступ запрещен. Перейдите по персональной ссылке.");
-        window.location.href = "index.html";
+        showToast("Нет токена доступа. Кабинет не загрузится.", "error");
+        document.getElementById('family-title').innerText = "Ошибка доступа";
         return;
     }
 
@@ -22,24 +22,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function loadFamilyData() {
     try {
-        // 1. Информация о семье
         const family = await familyRequest('/family/me');
         document.getElementById('family-title').innerText = family.name || 'Личный кабинет';
         
-        // 2. Дети
         childrenData = await familyRequest('/family/children');
         renderChildrenTabs();
 
-        // 3. Баланс
         try {
             const balance = await familyRequest('/family/subscriptions/balance');
             document.getElementById('balance-lessons').innerText = balance.remaining_lessons || 0;
             document.getElementById('balance-money').innerText = formatMoney(balance.money_balance || 0);
         } catch (e) { 
-            console.log("Баланс пока не грузится", e); 
+            console.log("Баланс не загрузился", e); 
         }
 
-        // 4. Занятия
         loadUpcomingLessons();
         
     } catch (err) {
@@ -50,7 +46,7 @@ async function loadFamilyData() {
 function renderChildrenTabs() {
     const container = document.getElementById('children-tabs');
     if (!childrenData || childrenData.length === 0) {
-        container.innerHTML = '<span style="color:var(--gray)">Нет добавленных детей</span>';
+        container.innerHTML = '<span style="color:var(--gray)">Нет детей</span>';
         return;
     }
     
@@ -76,12 +72,10 @@ async function loadUpcomingLessons() {
     try {
         const lessons = await familyRequest('/lessons');
         const container = document.getElementById('upcoming-lessons');
-        
         if (!lessons || lessons.length === 0) {
             container.innerHTML = '<p style="color: var(--gray);">Нет доступных занятий</p>';
             return;
         }
-
         container.innerHTML = lessons.map(l => `
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #F9FAFB; border-radius: 10px;">
                 <div>
@@ -91,12 +85,5 @@ async function loadUpcomingLessons() {
                 <div style="font-size: 13px;">Свободно: <b>${l.free_places}</b></div>
             </div>
         `).join('');
-    } catch (e) { 
-        console.error("Не удалось загрузить занятия", e); 
-    }
-}
-
-async function loadHistory() {
-    const container = document.getElementById('history-list');
-    container.innerHTML = '<p style="color: var(--gray);">История загрузки чеков появится позже</p>';
+    } catch (e) { console.error(e); }
 }

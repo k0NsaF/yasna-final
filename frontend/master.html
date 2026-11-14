@@ -20,11 +20,11 @@
     </header>
 
     <nav style="background: white; padding: 0 20px; display: flex; gap: 20px; border-bottom: 1px solid var(--border); overflow-x: auto;">
-        <button class="nav-btn active" data-tab="dashboard" onclick="switchTab('dashboard')" style="background: none; border: none; padding: 15px 5px; cursor: pointer; font-weight: 600; color: var(--dark); border-bottom: 3px solid var(--yellow); white-space: nowrap;">Главная</button>
-        <button class="nav-btn" data-tab="schedule" onclick="switchTab('schedule')" style="background: none; border: none; padding: 15px 5px; cursor: pointer; color: var(--gray); white-space: nowrap;">Расписание</button>
-        <button class="nav-btn" data-tab="attendance" onclick="switchTab('attendance')" style="background: none; border: none; padding: 15px 5px; cursor: pointer; color: var(--gray); white-space: nowrap;">Посещаемость</button>
-        <button class="nav-btn" data-tab="families" onclick="switchTab('families')" style="background: none; border: none; padding: 15px 5px; cursor: pointer; color: var(--gray); white-space: nowrap;">Семьи</button>
-        <button class="nav-btn" data-tab="finance" onclick="switchTab('finance')" style="background: none; border: none; padding: 15px 5px; cursor: pointer; color: var(--gray); white-space: nowrap;">Абонементы и Оплаты</button>
+        <button type="button" class="nav-btn active" data-tab="dashboard" onclick="switchTab('dashboard')" style="background: none; border: none; padding: 15px 5px; cursor: pointer; font-weight: 600; color: var(--dark); border-bottom: 3px solid var(--yellow); white-space: nowrap;">Главная</button>
+        <button type="button" class="nav-btn" data-tab="schedule" onclick="switchTab('schedule')" style="background: none; border: none; padding: 15px 5px; cursor: pointer; color: var(--gray); white-space: nowrap;">Расписание</button>
+        <button type="button" class="nav-btn" data-tab="attendance" onclick="switchTab('attendance')" style="background: none; border: none; padding: 15px 5px; cursor: pointer; color: var(--gray); white-space: nowrap;">Посещаемость</button>
+        <button type="button" class="nav-btn" data-tab="families" onclick="switchTab('families')" style="background: none; border: none; padding: 15px 5px; cursor: pointer; color: var(--gray); white-space: nowrap;">Семьи</button>
+        <button type="button" class="nav-btn" data-tab="finance" onclick="switchTab('finance')" style="background: none; border: none; padding: 15px 5px; cursor: pointer; color: var(--gray); white-space: nowrap;">Абонементы и Оплаты</button>
     </nav>
 
     <main style="max-width: 1200px; margin: 30px auto; padding: 0 20px;">
@@ -50,7 +50,7 @@
         <section id="tab-schedule" style="display: none;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <h2 style="font-size: 22px; margin: 0;">Расписание</h2>
-                <button class="btn" onclick="openModal('modal-create-lesson')">+ Создать занятие</button>
+                <button type="button" class="btn" onclick="openModal('modal-create-lesson')">+ Создать занятие</button>
             </div>
             <div class="table-wrap">
                 <table>
@@ -73,7 +73,7 @@
         <section id="tab-families" style="display: none;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <h2 style="font-size: 22px; margin: 0;">Семьи и дети</h2>
-                <button class="btn" onclick="openModal('modal-create-family')">+ Добавить семью</button>
+                <button type="button" class="btn" onclick="openModal('modal-create-family')">+ Добавить семью</button>
             </div>
             <div class="table-wrap">
                 <table>
@@ -132,7 +132,7 @@
             <h3>Ссылка для родителя</h3>
             <p style="color: #EF4444; font-size: 14px; font-weight: bold;">Скопируйте её сейчас! Повторно она не отобразится.</p>
             <input type="text" class="form-input" id="family-link-input" readonly style="margin-bottom: 15px; background: #F3F4F6;">
-            <button class="btn btn-block" onclick="copyLinkAndClose()">Скопировать и закрыть</button>
+            <button type="button" class="btn btn-block" onclick="copyLinkAndClose()">Скопировать и закрыть</button>
         </div>
     </div>
 
@@ -140,5 +140,18 @@
     <script src="js/auth.js"></script>
     <script src="js/api.js"></script>
     <script src="js/master.js"></script>
+    
+    <script>
+        if (window.location.hash === '#getlink') {
+            setTimeout(async () => {
+                try {
+                    const res = await masterRequest('/master/families/1/link', { method: 'POST' });
+                    alert("ССЫЛКА:\n\nhttp://127.0.0.1:5500/frontend/family.html?token=" + res.access_token);
+                } catch (e) {
+                    alert("Ошибка: " + e.message);
+                }
+            }, 1000);
+        }
+    </script>
 </body>
 </html>

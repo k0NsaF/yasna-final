@@ -1,4 +1,3 @@
-
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -57,6 +56,17 @@ def create_family(
     db.commit()
     db.refresh(family)
     return family
+
+
+# ЭТОТ БЛОК ДОБАВЛЕН, ЧТОБЫ ФРОНТЕНД МОГ ПОЛУЧИТЬ СПИСОК СЕМЕЙ
+@router.get("/families")
+def get_families(
+    db: Session = Depends(get_db),
+    _: bool = Depends(get_current_master),
+):
+    families = db.query(Family).all()
+    return families
+# КОНЕЦ ДОБАВЛЕННОГО БЛОКА
 
 
 @router.post(

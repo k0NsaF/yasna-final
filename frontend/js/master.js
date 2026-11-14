@@ -24,12 +24,16 @@ async function loadSchedule() {
     try {
         const lessons = await masterRequest('/master/lessons');
         const tbody = document.getElementById('schedule-list');
+        if (!lessons || lessons.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Нет созданных занятий</td></tr>';
+            return;
+        }
         tbody.innerHTML = lessons.map(l => `
             <tr>
                 <td>${formatDate(l.starts_at)}</td>
                 <td>${l.title}</td>
                 <td>${l.booked_count} / ${l.capacity}</td>
-                <td><button class="btn" style="padding: 6px 12px; font-size: 13px;">Изменить</button></td>
+                <td><button type="button" class="btn" style="padding: 6px 12px; font-size: 13px;">Изменить</button></td>
             </tr>
         `).join('');
     } catch (e) { showToast(e.message, 'error'); }
@@ -51,17 +55,28 @@ async function createLesson(e) {
 }
 
 async function loadAttendance() {
-    try {
-        // Пока оставим пустую таблицу, так как эндпоинта нет
-        document.getElementById('attendance-list').innerHTML = '<tr><td colspan="4" style="text-align:center;">Журнал пуст</td></tr>';
-    } catch (e) { showToast(e.message, 'error'); }
+    document.getElementById('attendance-list').innerHTML = '<tr><td colspan="4" style="text-align:center;">В разработке</td></tr>';
 }
 
 async function loadFamilies() {
     try {
-        // Бэкенд не отдает список семей (405 ошибка), поэтому просто пока заглушку
+        const families = await masterRequest('/master/families');
         const tbody = document.getElementById('families-list');
-        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--gray);">Список семей появится, когда друг допишет GET-запрос</td></tr>';
+        if (!families || families.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">Нет созданных семей</td></tr>';
+            return;
+        }
+        
+        // Кнопка теперь просто ведет в Swagger, не вызывая перезагрузку страницы
+        tbody.innerHTML = families.map(f => `
+            <tr>
+                <td>${f.name}</td>
+                <td>Есть</td> 
+                <td>
+                    <a href="http://127.0.0.1:8000/docs#/Мастер/create_family_link_api_master_families__family_id__link_post" target="_blank" class="btn" style="padding: 6px 12px; font-size: 13px; text-decoration: none; display: inline-block;">Получить ссылку</a>
+                </td>
+            </tr>
+        `).join('');
     } catch (e) { showToast(e.message, 'error'); }
 }
 
@@ -72,45 +87,17 @@ async function createFamily(e) {
             name: document.getElementById('family-name').value,
             phone: document.getElementById('family-phone').value
         };
-        
-        const familyRes = await masterRequest('/master/families', { 
-            method: 'POST', 
-            body: JSON.stringify(familyData) 
-        });
-        
+        const familyRes = await masterRequest('/master/families', { method: 'POST', body: JSON.stringify(familyData) });
         const childData = {
             first_name: document.getElementById('child-name').value,
             last_name: document.getElementById('child-lastname').value,
             birth_date: document.getElementById('child-birthdate').value
         };
-        
-        await masterRequest(`/master/families/${familyRes.id}/children`, { 
-            method: 'POST', 
-            body: JSON.stringify(childData) 
-        });
-        
+        await masterRequest(`/master/families/${familyRes.id}/children`, { method: 'POST', body: JSON.stringify(childData) });
         closeModal('modal-create-family');
-        showToast('Семья и ребенок успешно созданы');
-    } catch (err) { 
-        showToast(err.message, 'error'); 
-    }
-}
-
-async function generateLink(familyId) {
-    try {
-        const res = await masterRequest(`/master/families/${familyId}/link`, { method: 'POST' });
-        // Бэкенд возвращает access_token, а не token
-        document.getElementById('family-link-input').value = `${window.location.origin}/family.html?token=${res.access_token}`;
-        openModal('modal-show-link');
-    } catch (e) { showToast(e.message, 'error'); }
-}
-
-function copyLinkAndClose() {
-    const input = document.getElementById('family-link-input');
-    input.select();
-    document.execCommand('copy');
-    closeModal('modal-show-link');
-    showToast('Ссылка скопирована в буфер обмена');
+        showToast('Семья создана');
+        loadFamilies();
+    } catch (err) { showToast(err.message, 'error'); }
 }
 
 async function loadFinance() {
