@@ -1,0 +1,3802 @@
+﻿
+--- айл: C:\Users\макс\Desktop\yasna\backend\__init__.py ---
+
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\database.py ---
+
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import declarative_base, sessionmaker
+
+# Р“РґРµ Р±СѓРґРµС‚ С…СЂР°РЅРёС‚СЊСЃСЏ РЅР°С€Р° Р±Р°Р·Р° РґР°РЅРЅС‹С….
+# Р¤Р°Р№Р» yasna.db РїРѕСЏРІРёС‚СЃСЏ РІ РєРѕСЂРЅРµРІРѕР№ РїР°РїРєРµ РїСЂРѕРµРєС‚Р°.
+DATABASE_URL = "sqlite:///./yasna.db"
+
+# РЎРѕР·РґР°С‘Рј РїРѕРґРєР»СЋС‡РµРЅРёРµ Рє Р±Р°Р·Рµ РґР°РЅРЅС‹С….
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"check_same_thread": False}
+)
+
+# РЎРѕР·РґР°С‘Рј С„Р°Р±СЂРёРєСѓ РїРѕРґРєР»СЋС‡РµРЅРёР№ Рє Р±Р°Р·Рµ.
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine
+)
+
+# РћР±С‰РёР№ РєР»Р°СЃСЃ, РѕС‚ РєРѕС‚РѕСЂРѕРіРѕ Р±СѓРґСѓС‚ СЃРѕР·РґР°РІР°С‚СЊСЃСЏ С‚Р°Р±Р»РёС†С‹.
+Base = declarative_base()
+
+
+# Р¤СѓРЅРєС†РёСЏ РґР»СЏ РїРѕР»СѓС‡РµРЅРёСЏ РїРѕРґРєР»СЋС‡РµРЅРёСЏ РІ API.
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\main.py ---
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from .database import Base, engine
+from . import models
+from .routers import (
+    master,
+    family,
+    lessons,
+    bookings,
+    attendance,
+    subscriptions,
+    payments,
+    receipts,
+    notifications,
+    reports
+)
+
+app = FastAPI(
+    title="РЇСЃРЅР° API",
+    description="РЎРёСЃС‚РµРјР° Р·Р°РїРёСЃРё Рё СѓС‡С‘С‚Р° Р·Р°РЅСЏС‚РёР№ СЃС‚РѕР»СЏСЂРЅРѕР№ РјР°СЃС‚РµСЂСЃРєРѕР№",
+    version="1.0.0"
+)
+
+app.include_router(master.router)
+app.include_router(family.router)
+app.include_router(lessons.router)
+app.include_router(bookings.router)
+app.include_router(attendance.router)
+app.include_router(subscriptions.router)
+app.include_router(payments.router)
+app.include_router(receipts.router)
+app.include_router(notifications.router)
+app.include_router(reports.router)
+
+# Р’СЂРµРјРµРЅРЅРѕ СЂР°Р·СЂРµС€Р°РµРј Р»РѕРєР°Р»СЊРЅРѕРјСѓ frontend РѕР±СЂР°С‰Р°С‚СЊСЃСЏ Рє backend.
+# РџРµСЂРµРґ РїСѓР±Р»РёС‡РЅС‹Рј СЂР°Р·РјРµС‰РµРЅРёРµРј СЃРїРёСЃРѕРє Р°РґСЂРµСЃРѕРІ РЅСѓР¶РЅРѕ РѕРіСЂР°РЅРёС‡РёС‚СЊ.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://127.0.0.1:5500",
+        "http://localhost:5500",
+        "http://127.0.0.1:8000",
+        "http://localhost:8000",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.get("/")
+def home():
+    return {
+        "project": "РЇСЃРЅР°",
+        "message": "РЎРµСЂРІРµСЂ СЂР°Р±РѕС‚Р°РµС‚"
+    }
+
+
+@app.get("/api/health")
+def health_check():
+    return {
+        "status": "ok",
+        "project": "yasna"
+    }
+
+
+@app.on_event("startup")
+def create_database_tables():
+    Base.metadata.create_all(bind=engine)
+
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\models.py ---
+
+
+from datetime import datetime
+
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    UniqueConstraint,
+    Text,
+    Numeric
+)
+
+from sqlalchemy.orm import relationship
+
+from .database import Base
+
+
+# 1. РЎРµРјСЊРё
+class Family(Base):
+    __tablename__ = "families"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(150), nullable=False)
+    phone = Column(String(30), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    children = relationship("Child", back_populates="family")
+    tokens = relationship("FamilyToken", back_populates="family")
+
+
+# 2. Р”РµС‚Рё
+class Child(Base):
+    __tablename__ = "children"
+
+    id = Column(Integer, primary_key=True, index=True)
+    family_id = Column(Integer, ForeignKey("families.id"), nullable=False)
+    first_name = Column(String(100), nullable=False)
+    last_name = Column(String(100), nullable=True)
+    birth_date = Column(String(20), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    family = relationship("Family", back_populates="children")
+    bookings = relationship("Booking", back_populates="child")
+
+
+# 3. Р—Р°С‰РёС‰С‘РЅРЅС‹Рµ СЃСЃС‹Р»РєРё РґР»СЏ СЂРѕРґРёС‚РµР»РµР№
+class FamilyToken(Base):
+    __tablename__ = "family_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    family_id = Column(Integer, ForeignKey("families.id"), nullable=False)
+    token_hash = Column(String(64), unique=True, nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    revoked_at = Column(DateTime, nullable=True)
+
+    family = relationship("Family", back_populates="tokens")
+
+
+# 4. Р—Р°РЅСЏС‚РёСЏ
+class Lesson(Base):
+    __tablename__ = "lessons"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(150), nullable=False)
+    description = Column(Text, nullable=True)
+    starts_at = Column(DateTime, nullable=False)
+    duration_minutes = Column(Integer, default=60)
+    capacity = Column(Integer, nullable=False)
+    price = Column(Numeric(10, 2), default=0)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    bookings = relationship("Booking", back_populates="lesson")
+
+
+# 5. Р—Р°РїРёСЃРё РґРµС‚РµР№ РЅР° Р·Р°РЅСЏС‚РёСЏ
+class Booking(Base):
+    __tablename__ = "bookings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    child_id = Column(Integer, ForeignKey("children.id"), nullable=False)
+    lesson_id = Column(Integer, ForeignKey("lessons.id"), nullable=False)
+    status = Column(String(20), default="booked")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "child_id",
+            "lesson_id",
+            name="unique_child_lesson_booking"
+        ),
+    )
+
+    child = relationship("Child", back_populates="bookings")
+    lesson = relationship("Lesson", back_populates="bookings")
+    attendance = relationship(
+        "Attendance",
+        back_populates="booking",
+        uselist=False
+    )
+
+
+# 6. РџРѕСЃРµС‰РµРЅРёСЏ
+class Attendance(Base):
+    __tablename__ = "attendance"
+
+    id = Column(Integer, primary_key=True, index=True)
+    booking_id = Column(
+        Integer,
+        ForeignKey("bookings.id"),
+        unique=True,
+        nullable=False
+    )
+    status = Column(String(20), nullable=False)
+    marked_at = Column(DateTime, default=datetime.utcnow)
+
+    booking = relationship("Booking", back_populates="attendance")
+
+
+# 7. РСЃС‚РѕСЂРёСЏ РёР·РјРµРЅРµРЅРёСЏ РїРѕСЃРµС‰РµРЅРёР№
+class AttendanceHistory(Base):
+    __tablename__ = "attendance_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    attendance_id = Column(
+        Integer,
+        ForeignKey("attendance.id"),
+        nullable=False
+    )
+    old_status = Column(String(20), nullable=True)
+    new_status = Column(String(20), nullable=False)
+    changed_at = Column(DateTime, default=datetime.utcnow)
+    comment = Column(Text, nullable=True)
+
+
+# 8. РђР±РѕРЅРµРјРµРЅС‚С‹
+class Subscription(Base):
+    __tablename__ = "subscriptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    family_id = Column(Integer, ForeignKey("families.id"), nullable=False)
+    child_id = Column(Integer, ForeignKey("children.id"), nullable=True)
+    title = Column(String(150), nullable=False)
+    total_lessons = Column(Integer, nullable=False)
+    used_lessons = Column(Integer, default=0)
+    price = Column(Numeric(10, 2), nullable=False)
+    expires_at = Column(DateTime, nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# 9. РСЃС‚РѕСЂРёСЏ СЃРїРёСЃР°РЅРёР№ Рё РЅР°С‡РёСЃР»РµРЅРёР№ Р·Р°РЅСЏС‚РёР№
+class LessonTransaction(Base):
+    __tablename__ = "lesson_transactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    subscription_id = Column(
+        Integer,
+        ForeignKey("subscriptions.id"),
+        nullable=False
+    )
+    booking_id = Column(
+        Integer,
+        ForeignKey("bookings.id"),
+        nullable=True
+    )
+    amount = Column(Integer, nullable=False)
+    operation = Column(String(20), nullable=False)
+    reason = Column(String(200), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# 10. РћРїР»Р°С‚С‹
+class Payment(Base):
+    __tablename__ = "payments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    family_id = Column(Integer, ForeignKey("families.id"), nullable=False)
+    subscription_id = Column(
+        Integer,
+        ForeignKey("subscriptions.id"),
+        nullable=True
+    )
+    amount = Column(Numeric(10, 2), nullable=False)
+    status = Column(String(20), default="pending")
+    payment_method = Column(String(30), default="demo")
+    external_payment_id = Column(String(150), unique=True, nullable=True)
+    credited = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# 11. Р§РµРєРё
+class Receipt(Base):
+    __tablename__ = "receipts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    payment_id = Column(
+        Integer,
+        ForeignKey("payments.id"),
+        nullable=False
+    )
+    file_path = Column(String(500), nullable=True)
+    receipt_url = Column(String(1000), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# 12. РЈРІРµРґРѕРјР»РµРЅРёСЏ
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    family_id = Column(Integer, ForeignKey("families.id"), nullable=False)
+    title = Column(String(200), nullable=False)
+    message = Column(Text, nullable=False)
+    is_read = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\schemas.py ---
+
+
+from datetime import datetime
+from decimal import Decimal
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl
+
+
+# РћР±С‰Р°СЏ РЅР°СЃС‚СЂРѕР№РєР°: СЃС…РµРјС‹ РјРѕРіСѓС‚ С‡РёС‚Р°С‚СЊ РґР°РЅРЅС‹Рµ РёР· SQLAlchemy-РјРѕРґРµР»РµР№.
+class ORMModel(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ---------- РЎР•РњР¬Р ----------
+
+class FamilyCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=150)
+    phone: str | None = Field(default=None, max_length=30)
+
+
+class FamilyResponse(ORMModel):
+    id: int
+    name: str
+    phone: str | None = None
+    created_at: datetime
+
+
+# ---------- Р”Р•РўР ----------
+
+class ChildCreate(BaseModel):
+    first_name: str = Field(min_length=1, max_length=100)
+    last_name: str | None = Field(default=None, max_length=100)
+    birth_date: str | None = None
+
+
+class ChildResponse(ORMModel):
+    id: int
+    family_id: int
+    first_name: str
+    last_name: str | None = None
+    birth_date: str | None = None
+    created_at: datetime
+
+
+# ---------- Р—РђРќРЇРўРРЇ ----------
+
+class LessonCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    description: str | None = None
+    starts_at: datetime
+    duration_minutes: int = Field(default=60, ge=1, le=600)
+    capacity: int = Field(ge=1, le=100)
+    price: Decimal = Field(default=Decimal("0"), ge=0)
+
+
+class LessonResponse(ORMModel):
+    id: int
+    title: str
+    description: str | None = None
+    starts_at: datetime
+    duration_minutes: int
+    capacity: int
+    price: Decimal
+    is_active: bool
+    created_at: datetime
+
+
+class LessonPublicResponse(LessonResponse):
+    booked_count: int
+    free_places: int
+
+
+# ---------- Р—РђРџРРЎР ----------
+
+class BookingCreate(BaseModel):
+    child_id: int = Field(gt=0)
+    lesson_id: int = Field(gt=0)
+
+
+class BookingResponse(ORMModel):
+    id: int
+    child_id: int
+    lesson_id: int
+    status: str
+    created_at: datetime
+
+
+# ---------- РџРћРЎР•Р©РђР•РњРћРЎРўР¬ ----------
+
+class AttendanceUpdate(BaseModel):
+    status: str = Field(pattern="^(attended|missed|cancelled)$")
+    comment: str | None = None
+
+
+class AttendanceResponse(ORMModel):
+    id: int
+    booking_id: int
+    status: str
+    marked_at: datetime | None = None
+
+
+class AttendanceHistoryResponse(ORMModel):
+    id: int
+    attendance_id: int
+    old_status: str | None = None
+    new_status: str
+    changed_at: datetime
+    comment: str | None = None
+
+
+# ---------- РђР‘РћРќР•РњР•РќРўР« ----------
+
+class SubscriptionCreate(BaseModel):
+    family_id: int = Field(gt=0)
+    child_id: int | None = Field(default=None, gt=0)
+    title: str = Field(min_length=1, max_length=150)
+    total_lessons: int = Field(ge=1)
+    price: Decimal = Field(default=Decimal("0"), ge=0)
+    expires_at: datetime | None = None
+
+
+class SubscriptionResponse(ORMModel):
+    id: int
+    family_id: int
+    child_id: int | None = None
+    title: str
+    total_lessons: int
+    used_lessons: int
+    price: Decimal
+    expires_at: datetime | None = None
+    is_active: bool
+    created_at: datetime
+
+
+class SubscriptionBalance(BaseModel):
+    total_lessons: int
+    used_lessons: int
+    remaining_lessons: int
+    money_balance: Decimal = Decimal("0")
+
+
+# ---------- РџР›РђРўР•Р–Р ----------
+
+class PaymentCreate(BaseModel):
+    family_id: int = Field(gt=0)
+    subscription_id: int | None = Field(default=None, gt=0)
+    amount: Decimal = Field(gt=0)
+    payment_method: str = Field(default="demo", max_length=30)
+
+
+class PaymentResponse(ORMModel):
+    id: int
+    family_id: int
+    subscription_id: int | None = None
+    amount: Decimal
+    status: str
+    payment_method: str
+    external_payment_id: str | None = None
+    credited: bool
+    created_at: datetime
+
+
+class PaymentStatusUpdate(BaseModel):
+    status: str = Field(pattern="^(pending|succeeded|failed|cancelled)$")
+
+
+# ---------- Р§Р•РљР / РљР’РРўРђРќР¦РР ----------
+
+class ReceiptLinkCreate(BaseModel):
+    receipt_url: HttpUrl
+
+
+class ReceiptResponse(ORMModel):
+    id: int
+    payment_id: int
+    file_path: str | None = None
+    receipt_url: str | None = None
+    created_at: datetime
+
+
+# ---------- РЈР’Р•Р”РћРњР›Р•РќРРЇ ----------
+
+class NotificationResponse(ORMModel):
+    id: int
+    family_id: int
+    title: str
+    message: str
+    is_read: bool
+    created_at: datetime
+
+
+# ---------- РђР’РўРћР РР—РђР¦РРЇ ----------
+
+class MasterLogin(BaseModel):
+    password: str = Field(min_length=1, max_length=200)
+
+
+class MasterLoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
+class FamilyLinkResponse(BaseModel):
+    family_id: int
+    access_token: str
+    token_type: str = "bearer"
+    message: str = "РЎРѕС…СЂР°РЅРёС‚Рµ СЃСЃС‹Р»РєСѓ: С‚РѕРєРµРЅ РїРѕРєР°Р·С‹РІР°РµС‚СЃСЏ С‚РѕР»СЊРєРѕ РѕРґРёРЅ СЂР°Р·."
+
+
+# ---------- РћР‘Р©РР• РћРўР’Р•РўР« ----------
+
+class MessageResponse(BaseModel):
+    message: str
+
+
+class HealthResponse(BaseModel):
+    status: str
+    project: str
+
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\security.py ---
+
+
+import hashlib
+import hmac
+import os
+import secrets
+import time
+
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.orm import Session
+
+from .database import get_db
+from .models import FamilyToken
+
+
+# Р”Р»СЏ РґРµРјРѕРЅСЃС‚СЂР°С†РёРё Р·Р°РґР°РЅ РІСЂРµРјРµРЅРЅС‹Р№ РїР°СЂРѕР»СЊ.
+# РџРѕР·Р¶Рµ Р·Р°РјРµРЅРёРј РµРіРѕ РЅР° Р·РЅР°С‡РµРЅРёРµ РёР· .env.
+MASTER_PASSWORD = os.getenv("MASTER_PASSWORD", "yasna-demo-2026")
+
+# Р’СЂРµРјРµРЅРЅС‹Рµ СЃРµСЃСЃРёРё РјР°СЃС‚РµСЂР° С…СЂР°РЅСЏС‚СЃСЏ РІ РїР°РјСЏС‚Рё СЃРµСЂРІРµСЂР°.
+# РЎСЂРѕРє РґРµР№СЃС‚РІРёСЏ РѕРґРЅРѕР№ СЃРµСЃСЃРёРё вЂ” 12 С‡Р°СЃРѕРІ.
+MASTER_SESSION_SECONDS = 12 * 60 * 60
+_master_sessions = {}
+
+bearer_scheme = HTTPBearer(auto_error=False)
+
+
+def hash_token(token: str) -> str:
+    """Р’РѕР·РІСЂР°С‰Р°РµС‚ SHA-256-С…РµС€ С‚РѕРєРµРЅР°."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def generate_family_token() -> tuple[str, str]:
+    """
+    РЎРѕР·РґР°С‘С‚ СЃР»СѓС‡Р°Р№РЅС‹Р№ С‚РѕРєРµРЅ СЃРµРјСЊРё.
+    Р’РѕР·РІСЂР°С‰Р°РµС‚ СЃР°Рј С‚РѕРєРµРЅ Рё РµРіРѕ С…РµС€.
+    Р’ Р±Р°Р·Рµ СЃРѕС…СЂР°РЅСЏРµРј С‚РѕР»СЊРєРѕ С…РµС€.
+    """
+    token = secrets.token_urlsafe(32)
+    token_hash = hash_token(token)
+    return token, token_hash
+
+
+def create_master_session(password: str) -> str:
+    """РџСЂРѕРІРµСЂСЏРµС‚ РїР°СЂРѕР»СЊ РјР°СЃС‚РµСЂР° Рё СЃРѕР·РґР°С‘С‚ РІСЂРµРјРµРЅРЅСѓСЋ СЃРµСЃСЃРёСЋ."""
+    if not hmac.compare_digest(password, MASTER_PASSWORD):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="РќРµРІРµСЂРЅС‹Р№ РїР°СЂРѕР»СЊ РјР°СЃС‚РµСЂР°",
+        )
+
+    token = secrets.token_urlsafe(32)
+    _master_sessions[token] = time.time() + MASTER_SESSION_SECONDS
+    return token
+
+
+def get_current_master(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+) -> bool:
+    """РџСЂРѕРІРµСЂСЏРµС‚ bearer-С‚РѕРєРµРЅ РјР°СЃС‚РµСЂР°."""
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="РўСЂРµР±СѓРµС‚СЃСЏ Р°РІС‚РѕСЂРёР·Р°С†РёСЏ РјР°СЃС‚РµСЂР°",
+        )
+
+    token = credentials.credentials
+    expires_at = _master_sessions.get(token)
+
+    if expires_at is None or expires_at < time.time():
+        _master_sessions.pop(token, None)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="РЎРµСЃСЃРёСЏ РјР°СЃС‚РµСЂР° РЅРµРґРµР№СЃС‚РІРёС‚РµР»СЊРЅР° РёР»Рё РёСЃС‚РµРєР»Р°",
+        )
+
+    return True
+
+
+def get_current_family(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+):
+    """РќР°С…РѕРґРёС‚ СЃРµРјСЊСЋ РїРѕ Р°РєС‚РёРІРЅРѕРјСѓ РїРµСЂСЃРѕРЅР°Р»СЊРЅРѕРјСѓ С‚РѕРєРµРЅСѓ."""
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="РўСЂРµР±СѓРµС‚СЃСЏ РїРµСЂСЃРѕРЅР°Р»СЊРЅР°СЏ СЃСЃС‹Р»РєР° СЃРµРјСЊРё",
+        )
+
+    token_hash = hash_token(credentials.credentials)
+
+    family_token = (
+        db.query(FamilyToken)
+        .filter(FamilyToken.token_hash == token_hash)
+        .first()
+    )
+
+    if (
+        family_token is None
+        or not family_token.is_active
+        or family_token.revoked_at is not None
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="РЎСЃС‹Р»РєР° РЅРµРґРµР№СЃС‚РІРёС‚РµР»СЊРЅР° РёР»Рё РѕС‚РѕР·РІР°РЅР°",
+        )
+
+    return family_token.family
+
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\__init__.py ---
+
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\routers\attendance.py ---
+
+
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+
+from ..database import get_db
+from ..security import get_current_master
+from ..schemas import AttendanceUpdate, AttendanceResponse
+from ..services.attendance_service import (
+    mark_attendance,
+    get_attendance_history,
+)
+
+
+router = APIRouter(
+    prefix="/api/master",
+    tags=["РџРѕСЃРµС‰Р°РµРјРѕСЃС‚СЊ"],
+)
+
+
+@router.put(
+    "/bookings/{booking_id}/attendance",
+    response_model=AttendanceResponse,
+)
+def update_attendance(
+    booking_id: int,
+    payload: AttendanceUpdate,
+    db: Session = Depends(get_db),
+    master=Depends(get_current_master),
+):
+    return mark_attendance(
+        db=db,
+        booking_id=booking_id,
+        new_status=payload.status,
+        comment=getattr(payload, "comment", None),
+    )
+
+
+@router.get("/bookings/{booking_id}/attendance/history")
+def attendance_history(
+    booking_id: int,
+    db: Session = Depends(get_db),
+    master=Depends(get_current_master),
+):
+    return get_attendance_history(db, booking_id)
+
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\routers\bookings.py ---
+
+
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+
+from ..database import get_db
+from ..security import get_current_family
+from ..schemas import BookingCreate, BookingResponse
+from ..services.booking_service import create_booking, cancel_booking
+from ..models import Booking, Child
+
+
+router = APIRouter(
+    prefix="/api/family",
+    tags=["Р—Р°РїРёСЃСЊ РЅР° Р·Р°РЅСЏС‚РёСЏ"],
+)
+
+
+@router.post("/bookings", response_model=BookingResponse)
+def book_lesson(
+    payload: BookingCreate,
+    db: Session = Depends(get_db),
+    family=Depends(get_current_family),
+):
+    return create_booking(
+        db=db,
+        family_id=family.id,
+        child_id=payload.child_id,
+        lesson_id=payload.lesson_id,
+    )
+
+
+@router.get("/bookings", response_model=list[BookingResponse])
+def get_bookings(
+    db: Session = Depends(get_db),
+    family=Depends(get_current_family),
+):
+    return (
+        db.query(Booking)
+        .join(Child, Booking.child_id == Child.id)
+        .filter(Child.family_id == family.id)
+        .order_by(Booking.created_at.desc())
+        .all()
+    )
+
+
+@router.delete("/bookings/{booking_id}", response_model=BookingResponse)
+def delete_booking(
+    booking_id: int,
+    db: Session = Depends(get_db),
+    family=Depends(get_current_family),
+):
+    return cancel_booking(
+        db=db,
+        family_id=family.id,
+        booking_id=booking_id,
+    )
+
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\routers\family.py ---
+
+
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+
+from ..database import get_db
+from ..models import Child
+from ..schemas import FamilyResponse, ChildResponse
+from ..security import get_current_family
+
+router = APIRouter(prefix="/api/family", tags=["Р РѕРґРёС‚РµР»СЊ"])
+
+
+@router.get("/me", response_model=FamilyResponse)
+def family_me(
+    family=Depends(get_current_family),
+):
+    return family
+
+
+@router.get("/children", response_model=list[ChildResponse])
+def family_children(
+    family=Depends(get_current_family),
+    db: Session = Depends(get_db),
+):
+    children = (
+        db.query(Child)
+        .filter(Child.family_id == family.id)
+        .order_by(Child.id)
+        .all()
+    )
+    return children
+
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\routers\lessons.py ---
+
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
+from ..database import get_db
+from ..models import Lesson, Booking
+from ..schemas import LessonCreate, LessonResponse, LessonPublicResponse
+from ..security import get_current_master, get_current_family
+
+router = APIRouter(tags=["Р—Р°РЅСЏС‚РёСЏ"])
+
+
+def lesson_with_places(lesson: Lesson, db: Session):
+    """Р”РѕР±Р°РІР»СЏРµС‚ Рє Р·Р°РЅСЏС‚РёСЋ РєРѕР»РёС‡РµСЃС‚РІРѕ Р·Р°РїРёСЃР°РЅРЅС‹С… РґРµС‚РµР№ Рё СЃРІРѕР±РѕРґРЅС‹С… РјРµСЃС‚."""
+    booked_count = (
+        db.query(Booking)
+        .filter(
+            Booking.lesson_id == lesson.id,
+            Booking.status == "booked",
+        )
+        .count()
+    )
+
+    return {
+        "id": lesson.id,
+        "title": lesson.title,
+        "description": lesson.description,
+        "starts_at": lesson.starts_at,
+        "duration_minutes": lesson.duration_minutes,
+        "capacity": lesson.capacity,
+        "price": lesson.price,
+        "is_active": lesson.is_active,
+        "created_at": lesson.created_at,
+        "booked_count": booked_count,
+        "free_places": max(lesson.capacity - booked_count, 0),
+    }
+
+
+@router.post(
+    "/api/master/lessons",
+    response_model=LessonResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_lesson(
+    data: LessonCreate,
+    db: Session = Depends(get_db),
+    _: bool = Depends(get_current_master),
+):
+    lesson = Lesson(
+        title=data.title,
+        description=data.description,
+        starts_at=data.starts_at,
+        duration_minutes=data.duration_minutes,
+        capacity=data.capacity,
+        price=data.price,
+        is_active=True,
+    )
+
+    db.add(lesson)
+    db.commit()
+    db.refresh(lesson)
+    return lesson
+
+
+@router.get(
+    "/api/master/lessons",
+    response_model=list[LessonPublicResponse],
+)
+def master_lessons(
+    db: Session = Depends(get_db),
+    _: bool = Depends(get_current_master),
+):
+    lessons = (
+        db.query(Lesson)
+        .order_by(Lesson.starts_at)
+        .all()
+    )
+    return [lesson_with_places(lesson, db) for lesson in lessons]
+
+
+@router.get(
+    "/api/lessons",
+    response_model=list[LessonPublicResponse],
+)
+def public_lessons(
+    db: Session = Depends(get_db),
+    family=Depends(get_current_family),
+):
+    """Р Р°СЃРїРёСЃР°РЅРёРµ РґР»СЏ Р°РІС‚РѕСЂРёР·РѕРІР°РЅРЅРѕР№ СЃРµРјСЊРё."""
+    lessons = (
+        db.query(Lesson)
+        .filter(Lesson.is_active.is_(True))
+        .order_by(Lesson.starts_at)
+        .all()
+    )
+    return [lesson_with_places(lesson, db) for lesson in lessons]
+
+
+@router.get(
+    "/api/lessons/{lesson_id}",
+    response_model=LessonPublicResponse,
+)
+def get_lesson(
+    lesson_id: int,
+    db: Session = Depends(get_db),
+    family=Depends(get_current_family),
+):
+    lesson = (
+        db.query(Lesson)
+        .filter(
+            Lesson.id == lesson_id,
+            Lesson.is_active.is_(True),
+        )
+        .first()
+    )
+
+    if lesson is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Р—Р°РЅСЏС‚РёРµ РЅРµ РЅР°Р№РґРµРЅРѕ",
+        )
+
+    return lesson_with_places(lesson, db)
+
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\routers\master.py ---
+
+
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
+from ..database import get_db
+from ..models import Family, Child, FamilyToken
+from ..schemas import (
+    MasterLogin,
+    MasterLoginResponse,
+    FamilyCreate,
+    FamilyResponse,
+    ChildCreate,
+    ChildResponse,
+    FamilyLinkResponse,
+    MessageResponse,
+)
+from ..security import (
+    create_master_session,
+    generate_family_token,
+    get_current_master,
+)
+
+router = APIRouter(prefix="/api/master", tags=["РњР°СЃС‚РµСЂ"])
+
+
+@router.post("/login", response_model=MasterLoginResponse)
+def master_login(data: MasterLogin):
+    token = create_master_session(data.password)
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+    }
+
+
+@router.get("/me")
+def master_me(_: bool = Depends(get_current_master)):
+    return {"authenticated": True, "role": "master"}
+
+
+@router.post(
+    "/families",
+    response_model=FamilyResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_family(
+    data: FamilyCreate,
+    db: Session = Depends(get_db),
+    _: bool = Depends(get_current_master),
+):
+    family = Family(
+        name=data.name,
+        phone=data.phone,
+    )
+    db.add(family)
+    db.commit()
+    db.refresh(family)
+    return family
+
+
+@router.post(
+    "/families/{family_id}/children",
+    response_model=ChildResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_child(
+    family_id: int,
+    data: ChildCreate,
+    db: Session = Depends(get_db),
+    _: bool = Depends(get_current_master),
+):
+    family = db.query(Family).filter(Family.id == family_id).first()
+
+    if family is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="РЎРµРјСЊСЏ РЅРµ РЅР°Р№РґРµРЅР°",
+        )
+
+    child = Child(
+        family_id=family.id,
+        first_name=data.first_name,
+        last_name=data.last_name,
+        birth_date=data.birth_date,
+    )
+    db.add(child)
+    db.commit()
+    db.refresh(child)
+    return child
+
+
+@router.post(
+    "/families/{family_id}/link",
+    response_model=FamilyLinkResponse,
+)
+def create_family_link(
+    family_id: int,
+    db: Session = Depends(get_db),
+    _: bool = Depends(get_current_master),
+):
+    family = db.query(Family).filter(Family.id == family_id).first()
+
+    if family is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="РЎРµРјСЊСЏ РЅРµ РЅР°Р№РґРµРЅР°",
+        )
+
+    # РџСЂРё РІС‹РїСѓСЃРєРµ РЅРѕРІРѕР№ СЃСЃС‹Р»РєРё РѕС‚Р·С‹РІР°РµРј РїСЂРµРґС‹РґСѓС‰РёРµ Р°РєС‚РёРІРЅС‹Рµ СЃСЃС‹Р»РєРё.
+    active_tokens = (
+        db.query(FamilyToken)
+        .filter(
+            FamilyToken.family_id == family_id,
+            FamilyToken.is_active == True,
+        )
+        .all()
+    )
+
+    now = datetime.utcnow()
+    for old_token in active_tokens:
+        old_token.is_active = False
+        old_token.revoked_at = now
+
+    plain_token, token_hash = generate_family_token()
+
+    new_token = FamilyToken(
+        family_id=family_id,
+        token_hash=token_hash,
+        is_active=True,
+    )
+    db.add(new_token)
+    db.commit()
+
+    return {
+        "family_id": family_id,
+        "access_token": plain_token,
+        "token_type": "bearer",
+        "message": "РЎРѕС…СЂР°РЅРёС‚Рµ С‚РѕРєРµРЅ: РѕРЅ РїРѕРєР°Р·С‹РІР°РµС‚СЃСЏ С‚РѕР»СЊРєРѕ РѕРґРёРЅ СЂР°Р·.",
+    }
+
+
+@router.post(
+    "/families/{family_id}/revoke-link",
+    response_model=MessageResponse,
+)
+def revoke_family_link(
+    family_id: int,
+    db: Session = Depends(get_db),
+    _: bool = Depends(get_current_master),
+):
+    family = db.query(Family).filter(Family.id == family_id).first()
+
+    if family is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="РЎРµРјСЊСЏ РЅРµ РЅР°Р№РґРµРЅР°",
+        )
+
+    active_tokens = (
+        db.query(FamilyToken)
+        .filter(
+            FamilyToken.family_id == family_id,
+            FamilyToken.is_active == True,
+        )
+        .all()
+    )
+
+    now = datetime.utcnow()
+    for family_token in active_tokens:
+        family_token.is_active = False
+        family_token.revoked_at = now
+
+    db.commit()
+    return {"message": "РџРµСЂСЃРѕРЅР°Р»СЊРЅС‹Рµ СЃСЃС‹Р»РєРё СЃРµРјСЊРё РѕС‚РѕР·РІР°РЅС‹"}
+
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\routers\notifications.py ---
+
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+
+from ..database import get_db
+from ..security import get_current_master, get_current_family
+from ..models import Notification, Family
+from ..schemas import NotificationResponse
+
+
+router = APIRouter(tags=["РЈРІРµРґРѕРјР»РµРЅРёСЏ"])
+
+
+class NotificationCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    message: str = Field(min_length=1, max_length=2000)
+
+
+# РњР°СЃС‚РµСЂ РѕС‚РїСЂР°РІР»СЏРµС‚ СѓРІРµРґРѕРјР»РµРЅРёРµ РєРѕРЅРєСЂРµС‚РЅРѕР№ СЃРµРјСЊРµ.
+@router.post(
+    "/api/master/families/{family_id}/notifications",
+    response_model=NotificationResponse
+)
+def create_notification(
+    family_id: int,
+    payload: NotificationCreate,
+    db: Session = Depends(get_db),
+    master=Depends(get_current_master)
+):
+    family = db.query(Family).filter(
+        Family.id == family_id
+    ).first()
+
+    if not family:
+        raise HTTPException(
+            status_code=404,
+            detail="РЎРµРјСЊСЏ РЅРµ РЅР°Р№РґРµРЅР°"
+        )
+
+    notification = Notification(
+        family_id=family_id,
+        title=payload.title,
+        message=payload.message,
+        is_read=False
+    )
+
+    db.add(notification)
+    db.commit()
+    db.refresh(notification)
+
+    return notification
+
+
+# Р РѕРґРёС‚РµР»СЊ РїРѕР»СѓС‡Р°РµС‚ СѓРІРµРґРѕРјР»РµРЅРёСЏ С‚РѕР»СЊРєРѕ СЃРІРѕРµР№ СЃРµРјСЊРё.
+@router.get(
+    "/api/family/notifications",
+    response_model=list[NotificationResponse]
+)
+def get_family_notifications(
+    db: Session = Depends(get_db),
+    family=Depends(get_current_family)
+):
+    return (
+        db.query(Notification)
+        .filter(Notification.family_id == family.id)
+        .order_by(Notification.created_at.desc())
+        .all()
+    )
+
+
+# Р РѕРґРёС‚РµР»СЊ РѕС‚РјРµС‡Р°РµС‚ РѕРґРЅРѕ СѓРІРµРґРѕРјР»РµРЅРёРµ РїСЂРѕС‡РёС‚Р°РЅРЅС‹Рј.
+@router.patch(
+    "/api/family/notifications/{notification_id}/read",
+    response_model=NotificationResponse
+)
+def mark_notification_read(
+    notification_id: int,
+    db: Session = Depends(get_db),
+    family=Depends(get_current_family)
+):
+    notification = (
+        db.query(Notification)
+        .filter(
+            Notification.id == notification_id,
+            Notification.family_id == family.id
+        )
+        .first()
+    )
+
+    if not notification:
+        raise HTTPException(
+            status_code=404,
+            detail="РЈРІРµРґРѕРјР»РµРЅРёРµ РЅРµ РЅР°Р№РґРµРЅРѕ"
+        )
+
+    notification.is_read = True
+
+    db.commit()
+    db.refresh(notification)
+
+    return notification
+
+
+# Р РѕРґРёС‚РµР»СЊ РѕС‚РјРµС‡Р°РµС‚ РІСЃРµ СЃРІРѕРё СѓРІРµРґРѕРјР»РµРЅРёСЏ РїСЂРѕС‡РёС‚Р°РЅРЅС‹РјРё.
+@router.patch("/api/family/notifications/read-all")
+def mark_all_notifications_read(
+    db: Session = Depends(get_db),
+    family=Depends(get_current_family)
+):
+    db.query(Notification).filter(
+        Notification.family_id == family.id,
+        Notification.is_read.is_(False)
+    ).update(
+        {Notification.is_read: True},
+        synchronize_session=False
+    )
+
+    db.commit()
+
+    return {
+        "status": "ok",
+        "message": "Р’СЃРµ СѓРІРµРґРѕРјР»РµРЅРёСЏ РѕС‚РјРµС‡РµРЅС‹ РїСЂРѕС‡РёС‚Р°РЅРЅС‹РјРё"
+    }
+
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\routers\payments.py ---
+
+
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+
+from ..database import get_db
+from ..security import get_current_master, get_current_family
+from ..schemas import (
+    PaymentCreate,
+    PaymentResponse,
+    PaymentStatusUpdate,
+)
+from ..services.payment_service import (
+    create_payment,
+    get_family_payments,
+    get_all_payments,
+    update_payment_status,
+)
+
+
+router = APIRouter(tags=["РџР»Р°С‚РµР¶Рё"])
+
+
+# ---------- Р РћР”РРўР•Р›Р ----------
+
+@router.post(
+    "/api/family/payments",
+    response_model=PaymentResponse,
+)
+def family_create_payment(
+    payload: PaymentCreate,
+    db: Session = Depends(get_db),
+    family=Depends(get_current_family),
+):
+    if payload.family_id != family.id:
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=403,
+            detail="РќРµР»СЊР·СЏ СЃРѕР·РґР°С‚СЊ РїР»Р°С‚С‘Р¶ РґР»СЏ РґСЂСѓРіРѕР№ СЃРµРјСЊРё",
+        )
+
+    if payload.subscription_id is None:
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=400,
+            detail="Р”Р»СЏ РѕРїР»Р°С‚С‹ РЅРµРѕР±С…РѕРґРёРјРѕ СѓРєР°Р·Р°С‚СЊ Р°Р±РѕРЅРµРјРµРЅС‚",
+        )
+
+    return create_payment(
+        db=db,
+        family_id=family.id,
+        subscription_id=payload.subscription_id,
+        amount=payload.amount,
+        payment_method=payload.payment_method,
+    )
+
+
+@router.get(
+    "/api/family/payments",
+    response_model=list[PaymentResponse],
+)
+def family_payments(
+    db: Session = Depends(get_db),
+    family=Depends(get_current_family),
+):
+    return get_family_payments(db, family.id)
+
+
+# ---------- РњРђРЎРўР•Р  ----------
+
+@router.get(
+    "/api/master/payments",
+    response_model=list[PaymentResponse],
+)
+def master_payments(
+    db: Session = Depends(get_db),
+    master=Depends(get_current_master),
+):
+    return get_all_payments(db)
+
+
+@router.patch(
+    "/api/master/payments/{payment_id}/status",
+    response_model=PaymentResponse,
+)
+def master_update_payment(
+    payment_id: int,
+    payload: PaymentStatusUpdate,
+    db: Session = Depends(get_db),
+    master=Depends(get_current_master),
+):
+    return update_payment_status(
+        db=db,
+        payment_id=payment_id,
+        new_status=payload.status,
+    )
+
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\routers\receipts.py ---
+
+
+from pathlib import Path
+from uuid import uuid4
+
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    UploadFile,
+    File,
+)
+from fastapi.responses import FileResponse
+from sqlalchemy.orm import Session
+
+from ..database import get_db
+from ..security import get_current_master, get_current_family
+from ..models import Payment, Receipt
+from ..schemas import ReceiptLinkCreate, ReceiptResponse
+
+
+router = APIRouter(tags=["Р§РµРєРё Рё РєРІРёС‚Р°РЅС†РёРё"])
+
+UPLOAD_DIR = Path(__file__).resolve().parents[2] / "uploads" / "receipts"
+ALLOWED_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg"}
+MAX_FILE_SIZE = 5 * 1024 * 1024
+
+
+# ---------- РњРђРЎРўР•Р : Р”РћР‘РђР’РРўР¬ РЎРЎР«Р›РљРЈ ----------
+
+@router.post(
+    "/api/master/payments/{payment_id}/receipt/link",
+    response_model=ReceiptResponse,
+)
+def add_receipt_link(
+    payment_id: int,
+    payload: ReceiptLinkCreate,
+    db: Session = Depends(get_db),
+    master=Depends(get_current_master),
+):
+    payment = db.query(Payment).filter(
+        Payment.id == payment_id
+    ).first()
+
+    if not payment:
+        raise HTTPException(404, "РџР»Р°С‚С‘Р¶ РЅРµ РЅР°Р№РґРµРЅ")
+
+    if payment.status != "succeeded":
+        raise HTTPException(
+            400,
+            "Р§РµРє РјРѕР¶РЅРѕ РїСЂРёРєСЂРµРїРёС‚СЊ С‚РѕР»СЊРєРѕ Рє СѓСЃРїРµС€РЅРѕРјСѓ РїР»Р°С‚РµР¶Сѓ",
+        )
+
+    receipt = Receipt(
+        payment_id=payment_id,
+        receipt_url=str(payload.receipt_url),
+    )
+
+    try:
+        db.add(receipt)
+        db.commit()
+        db.refresh(receipt)
+        return receipt
+    except Exception:
+        db.rollback()
+        raise
+
+
+# ---------- РњРђРЎРўР•Р : Р—РђР“Р РЈР—РРўР¬ Р¤РђР™Р› ----------
+
+@router.post(
+    "/api/master/payments/{payment_id}/receipt/file",
+    response_model=ReceiptResponse,
+)
+async def upload_receipt_file(
+    payment_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    master=Depends(get_current_master),
+):
+    payment = db.query(Payment).filter(
+        Payment.id == payment_id
+    ).first()
+
+    if not payment:
+        raise HTTPException(404, "РџР»Р°С‚С‘Р¶ РЅРµ РЅР°Р№РґРµРЅ")
+
+    if payment.status != "succeeded":
+        raise HTTPException(
+            400,
+            "Р§РµРє РјРѕР¶РЅРѕ РїСЂРёРєСЂРµРїРёС‚СЊ С‚РѕР»СЊРєРѕ Рє СѓСЃРїРµС€РЅРѕРјСѓ РїР»Р°С‚РµР¶Сѓ",
+        )
+
+    extension = Path(file.filename or "").suffix.lower()
+
+    if extension not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            400,
+            "Р Р°Р·СЂРµС€РµРЅС‹ С‚РѕР»СЊРєРѕ PDF, PNG, JPG Рё JPEG",
+        )
+
+    content = await file.read(MAX_FILE_SIZE + 1)
+
+    if not content:
+        raise HTTPException(400, "Р¤Р°Р№Р» РїСѓСЃС‚РѕР№")
+
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(400, "РњР°РєСЃРёРјР°Р»СЊРЅС‹Р№ СЂР°Р·РјРµСЂ С„Р°Р№Р»Р° вЂ” 5 РњР‘")
+
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+    filename = f"{uuid4().hex}{extension}"
+    destination = UPLOAD_DIR / filename
+
+    try:
+        destination.write_bytes(content)
+
+        receipt = Receipt(
+            payment_id=payment_id,
+            file_path=filename,
+        )
+
+        db.add(receipt)
+        db.commit()
+        db.refresh(receipt)
+
+        return receipt
+
+    except Exception:
+        db.rollback()
+        destination.unlink(missing_ok=True)
+        raise
+
+    finally:
+        await file.close()
+
+
+# ---------- Р РћР”РРўР•Р›Р¬: РџР РћРЎРњРћРўР  Р§Р•РљРђ ----------
+
+@router.get(
+    "/api/family/payments/{payment_id}/receipt",
+    response_model=list[ReceiptResponse],
+)
+def get_family_receipts(
+    payment_id: int,
+    db: Session = Depends(get_db),
+    family=Depends(get_current_family),
+):
+    payment = db.query(Payment).filter(
+        Payment.id == payment_id,
+        Payment.family_id == family.id,
+    ).first()
+
+    if not payment:
+        raise HTTPException(404, "РџР»Р°С‚С‘Р¶ РЅРµ РЅР°Р№РґРµРЅ")
+
+    return (
+        db.query(Receipt)
+        .filter(Receipt.payment_id == payment_id)
+        .order_by(Receipt.created_at.desc())
+        .all()
+    )
+
+
+# ---------- Р РћР”РРўР•Р›Р¬: РЎРљРђР§РђРўР¬ Р¤РђР™Р› ----------
+
+@router.get(
+    "/api/family/receipts/{receipt_id}/download"
+)
+def download_family_receipt(
+    receipt_id: int,
+    db: Session = Depends(get_db),
+    family=Depends(get_current_family),
+):
+    receipt = (
+        db.query(Receipt)
+        .join(Payment, Receipt.payment_id == Payment.id)
+        .filter(
+            Receipt.id == receipt_id,
+            Payment.family_id == family.id,
+        )
+        .first()
+    )
+
+    if not receipt:
+        raise HTTPException(404, "Р§РµРє РЅРµ РЅР°Р№РґРµРЅ")
+
+    if not receipt.file_path:
+        raise HTTPException(
+            400,
+            "Р”Р»СЏ СЌС‚РѕРіРѕ С‡РµРєР° РґРѕСЃС‚СѓРїРЅР° СЃСЃС‹Р»РєР°, Р° РЅРµ С„Р°Р№Р»",
+        )
+
+    file_path = UPLOAD_DIR / Path(receipt.file_path).name
+
+    if not file_path.is_file():
+        raise HTTPException(404, "Р¤Р°Р№Р» С‡РµРєР° РЅРµ РЅР°Р№РґРµРЅ РЅР° СЃРµСЂРІРµСЂРµ")
+
+    return FileResponse(
+        path=file_path,
+        filename=file_path.name,
+        media_type="application/octet-stream",
+    )
+
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\routers\reports.py ---
+
+
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
+from sqlalchemy.orm import Session
+
+from ..database import get_db
+from ..security import get_current_master
+from ..services.export_service import EXPORTS
+
+
+router = APIRouter(
+    prefix="/api/master/reports",
+    tags=["РћС‚С‡С‘С‚С‹"]
+)
+
+
+@router.get("/{report_type}/csv")
+def download_report(
+    report_type: str,
+    db: Session = Depends(get_db),
+    master=Depends(get_current_master)
+):
+    export_function = EXPORTS.get(report_type)
+
+    if export_function is None:
+        raise HTTPException(
+            status_code=404,
+            detail="РўР°РєРѕР№ С‚РёРї РѕС‚С‡С‘С‚Р° РЅРµ СЃСѓС‰РµСЃС‚РІСѓРµС‚"
+        )
+
+    csv_content = export_function(db)
+
+    return Response(
+        content=csv_content,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{report_type}_report.csv"'
+            )
+        }
+    )
+
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\routers\subscriptions.py ---
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
+from ..database import get_db
+from ..models import Family, Child, Subscription
+from ..schemas import (
+    SubscriptionCreate,
+    SubscriptionResponse,
+    SubscriptionBalance,
+)
+from ..security import get_current_master, get_current_family
+
+
+router = APIRouter(tags=["РђР±РѕРЅРµРјРµРЅС‚С‹"])
+
+
+# РњР°СЃС‚РµСЂ СЃРѕР·РґР°С‘С‚ Р°Р±РѕРЅРµРјРµРЅС‚
+@router.post(
+    "/api/master/subscriptions",
+    response_model=SubscriptionResponse,
+)
+def create_subscription(
+    payload: SubscriptionCreate,
+    db: Session = Depends(get_db),
+    master=Depends(get_current_master),
+):
+    family = db.query(Family).filter(
+        Family.id == payload.family_id
+    ).first()
+
+    if not family:
+        raise HTTPException(
+            status_code=404,
+            detail="РЎРµРјСЊСЏ РЅРµ РЅР°Р№РґРµРЅР°",
+        )
+
+    if payload.child_id is not None:
+        child = db.query(Child).filter(
+            Child.id == payload.child_id,
+            Child.family_id == payload.family_id,
+        ).first()
+
+        if not child:
+            raise HTTPException(
+                status_code=404,
+                detail="Р РµР±С‘РЅРѕРє РЅРµ РЅР°Р№РґРµРЅ РІ СЌС‚РѕР№ СЃРµРјСЊРµ",
+            )
+
+    subscription = Subscription(
+        family_id=payload.family_id,
+        child_id=payload.child_id,
+        title=payload.title,
+        total_lessons=payload.total_lessons,
+        used_lessons=0,
+        price=payload.price,
+        expires_at=payload.expires_at,
+        is_active=True,
+    )
+
+    db.add(subscription)
+    db.commit()
+    db.refresh(subscription)
+
+    return subscription
+
+
+# РњР°СЃС‚РµСЂ СЃРјРѕС‚СЂРёС‚ РІСЃРµ Р°Р±РѕРЅРµРјРµРЅС‚С‹
+@router.get(
+    "/api/master/subscriptions",
+    response_model=list[SubscriptionResponse],
+)
+def get_all_subscriptions(
+    db: Session = Depends(get_db),
+    master=Depends(get_current_master),
+):
+    return (
+        db.query(Subscription)
+        .order_by(Subscription.created_at.desc())
+        .all()
+    )
+
+
+# Р РѕРґРёС‚РµР»СЊ РІРёРґРёС‚ Р°Р±РѕРЅРµРјРµРЅС‚С‹ С‚РѕР»СЊРєРѕ СЃРІРѕРµР№ СЃРµРјСЊРё
+@router.get(
+    "/api/family/subscriptions",
+    response_model=list[SubscriptionResponse],
+)
+def get_family_subscriptions(
+    db: Session = Depends(get_db),
+    family=Depends(get_current_family),
+):
+    return (
+        db.query(Subscription)
+        .filter(Subscription.family_id == family.id)
+        .order_by(Subscription.created_at.desc())
+        .all()
+    )
+
+
+# Р РѕРґРёС‚РµР»СЊ РІРёРґРёС‚ РѕР±С‰РёР№ Р±Р°Р»Р°РЅСЃ Р·Р°РЅСЏС‚РёР№ СЃРІРѕРµР№ СЃРµРјСЊРё
+@router.get(
+    "/api/family/subscriptions/balance",
+    response_model=SubscriptionBalance,
+)
+def get_family_subscription_balance(
+    db: Session = Depends(get_db),
+    family=Depends(get_current_family),
+):
+    subscriptions = (
+        db.query(Subscription)
+        .filter(
+            Subscription.family_id == family.id,
+            Subscription.is_active.is_(True),
+        )
+        .all()
+    )
+
+    total = sum(item.total_lessons for item in subscriptions)
+    used = sum(item.used_lessons for item in subscriptions)
+
+    return {
+        "total_lessons": total,
+        "used_lessons": used,
+        "remaining_lessons": max(0, total - used),
+        "money_balance": 0,
+    }
+
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\routers\__init__.py ---
+
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\routers\__pycache__\attendance.cpython-313.pyc ---
+
+у
+    jLшj;  г                   у  • S SK JrJr  S SKJr  SSKJr  SSKJr  SSK	J
+r
+Jr  SSKJrJr  \" SS	/S
+9r\R!                  S\S9\" \5      \" \5      4S\S\
+S\4S jj5       r\R'                  S5      \" \5      \" \5      4S\S\4S jj5       rg)й    )Ъ	APIRouterЪDepends)ЪSessionй   )Ъget_db)Ъget_current_master)ЪAttendanceUpdateЪAttendanceResponse)Ъmark_attendanceЪget_attendance_historyz/api/masteru   РџРѕСЃРµС‰Р°РµРјРѕСЃС‚СЊ)ЪprefixЪtagsz!/bookings/{booking_id}/attendance)Ъresponse_modelЪ
+booking_idЪpayloadЪdbc           
+      уD   • [        UU UR                  [        USS 5      S9$ )NЪcomment)r   r   Ъ
+new_statusr   )r   ЪstatusЪgetattr)r   r   r   Ъmasters       фA   C:\Users\РјР°РєСЃ\Desktop\yasna\backend\app\routers\attendance.pyЪupdate_attendancer      s*   Ђ ф ШШШ—>‘>Ь ЁDУ1с	р у    z)/bookings/{booking_id}/attendance/historyc                 у   • [        X5      $ )N)r   )r   r   r   s      r   Ъattendance_historyr   &   s   Ђ ф " "У1Р1r   N)Ъfastapir   r   Ъsqlalchemy.ormr   Ъdatabaser   Ъsecurityr   Ъschemasr	   r
+   Ъservices.attendance_servicer   r   ЪrouterЪputЪintr   Ъgetr   © r   r   Ъ<module>r)      sВ   рз &Э "е Э )Я :чс 
+ШШ
+$Р	%с
+Ђр ‡ЃШ'Ш%р р с &“/ЩР%У&с	Шрарр 	фу	рр ‡ЃР7У8с &“/ЩР%У&с2Шр2аф2у 9с2r   
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\routers\__pycache__\bookings.cpython-313.pyc ---
+
+у
+    Oшj±  г                   у‚  • S SK JrJr  S SKJr  SSKJr  SSKJr  SSK	J
+r
+Jr  SSKJrJr  SSKJrJr  \" S	S
+/S9r\R'                  S\S9\" \5      \" \5      4S\
+S\4S jj5       r\R+                  S\\   S9\" \5      \" \5      4S\4S jj5       r\R1                  S\S9\" \5      \" \5      4S\S\4S jj5       rg)й    )Ъ	APIRouterЪDepends)ЪSessionй   )Ъget_db)Ъget_current_family)ЪBookingCreateЪBookingResponse)Ъcreate_bookingЪcancel_booking)ЪBookingЪChildz/api/familyu    Р—Р°РїРёСЃСЊ РЅР° Р·Р°РЅСЏС‚РёСЏ)ЪprefixЪtagsz	/bookings)Ъresponse_modelЪpayloadЪdbc                 уV   • [        UUR                  U R                  U R                  S9$ )N)r   Ъ	family_idЪchild_idЪ	lesson_id)r   Ъidr   r   )r   r   Ъfamilys      ф?   C:\Users\РјР°РєСЃ\Desktop\yasna\backend\app\routers\bookings.pyЪbook_lessonr      s-   Ђ ф ШШ—)‘)ШЧ!С!ШЧ#С#с	р у    c                 уX  • U R                  [        5      R                  [        [        R                  [        R
+                  :H  5      R                  [        R                  UR
+                  :H  5      R                  [        R                  R                  5       5      R                  5       $ )N)Ъqueryr   Ъjoinr   r   r   Ъfilterr   Ъorder_byЪ
+created_atЪdescЪall)r   r   s     r   Ъget_bookingsr%       sg   Ђ р 	Џ‰”УЯ	‰Њe”WЧ%С%¬Ї©С1У	2Я	‰”—‘ 6§9Ў9С,У	-Я	‰”'Ч$С$Ч)С)У+У	,Я	‰‹рr   z/bookings/{booking_id}Ъ
+booking_idc                 у,   • [        UUR                  U S9$ )N)r   r   r&   )r   r   )r&   r   r   s      r   Ъdelete_bookingr(   .   s   Ђ ф ШШ—)‘)Шср r   N)Ъfastapir   r   Ъsqlalchemy.ormr   Ъdatabaser   Ъsecurityr   Ъschemasr	   r
+   Ъservices.booking_servicer   r   Ъmodelsr   r   ЪrouterЪpostr   ЪgetЪlistr%   ЪdeleteЪintr(   © r   r   Ъ<module>r7      sх   рз &Э "е Э )Я 4Я EЯ #с 
+ШШ
+,Р	-с
+Ђр ‡Ѓ€[ЁЂР9с &“/ЩР%У&с
+Шр
+аф
+у :р
+р ‡Ѓ€KЁЁ_С(=ЂР>б&“/ЩР%У&с
+Шф
+у ?р
+р ‡ЃР'ёЂРHс &“/ЩР%У&с	Шр	аф	у Iс	r   
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\routers\__pycache__\family.cpython-313.pyc ---
+
+у
+    ,8шj  г                   уь   • S SK JrJr  S SKJr  SSKJr  SSKJr  SSK	J
+r
+Jr  SSKJr  \" SS	/S
+9r\R                  S\
+S9\" \5      4S j5       r\R                  S\\   S9\" \5      \" \5      4S\4S jj5       rg)й    )Ъ	APIRouterЪDepends)ЪSessionй   )Ъget_db)ЪChild)ЪFamilyResponseЪChildResponse)Ъget_current_familyz/api/familyu   Р РѕРґРёС‚РµР»СЊ)ЪprefixЪtagsz/me)Ъresponse_modelc                 у   • U $ ©N© )Ъfamilys    ф=   C:\Users\РјР°РєСЃ\Desktop\yasna\backend\app\routers\family.pyЪ	family_mer      s	   Ђ р ЂMу    z	/childrenЪdbc                 уЪ   • UR                  [        5      R                  [        R                  U R                  :H  5      R                  [        R                  5      R                  5       nU$ r   )Ъqueryr   ЪfilterЪ	family_idЪidЪorder_byЪall)r   r   Ъchildrens      r   Ъfamily_childrenr      sG   Ђ р 	Џ‰”‹Я	‰”—‘ 6§9Ў9С,У	-Я	‰”%—(‘(У	Я	‰‹р	 р ЂOr   N)Ъfastapir   r   Ъsqlalchemy.ormr   Ъdatabaser   Ъmodelsr   Ъschemasr	   r
+   Ъsecurityr   ЪrouterЪgetr   Ъlistr   r   r   r   Ъ<module>r)      sЏ   рз &Э "е Э Я 3Э )б	-Р/AР.BС	CЂр ‡Ѓ€E .ЂР1бР%У&уу 2рр ‡Ѓ€KЁЁ]С(;ЂР<бР%У&Щ&“/с
+аф
+у =с
+r   
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\routers\__pycache__\lessons.cpython-313.pyc ---
+
+у
+    *FшjУ  г                   у
+  • S SK JrJrJrJr  S SKJr  SSKJr  SSK	J
+r
+Jr  SSKJrJrJr  SSKJrJr  \" S/S	9rS
+\
+S\4S jr\R+                  S\\R,                  S9\" \5      \" \5      4S\S\S\4S jj5       r\R3                  S\\   S9\" \5      \" \5      4S\S\4S jj5       r\R3                  S\\   S9\" \5      \" \5      4S\4S jj5       r\R3                  S\S9\" \5      \" \5      4S\S\4S jj5       rg)й    )Ъ	APIRouterЪDependsЪHTTPExceptionЪstatus)ЪSessionй   )Ъget_db)ЪLessonЪBooking)ЪLessonCreateЪLessonResponseЪLessonPublicResponse)Ъget_current_masterЪget_current_familyu   Р—Р°РЅСЏС‚РёСЏ)ЪtagsЪlessonЪdbc                 уѕ  • UR                  [        5      R                  [        R                  U R                  :H  [        R
+                  S:H  5      R                  5       nU R                  U R                  U R                  U R                  U R                  U R                  U R                  U R                  U R                  U[        U R                  U-
+  S5      S.$ )uy   Р”РѕР±Р°РІР»СЏРµС‚ Рє Р·Р°РЅСЏС‚РёСЋ РєРѕР»РёС‡РµСЃС‚РІРѕ Р·Р°РїРёСЃР°РЅРЅС‹С… РґРµС‚РµР№ Рё СЃРІРѕР±РѕРґРЅС‹С… РјРµСЃС‚.Ъbookedr   )ЪidЪtitleЪdescriptionЪ	starts_atЪduration_minutesЪcapacityЪpriceЪ	is_activeЪ
+created_atЪbooked_countЪfree_places)Ъqueryr   ЪfilterЪ	lesson_idr   r   Ъcountr   r   r   r   r   r   r   r   Ъmax)r   r   r   s      ф>   C:\Users\РјР°РєСЃ\Desktop\yasna\backend\app\routers\lessons.pyЪlesson_with_placesr'      s±   Ђ р 	Џ‰”УЯ	‰ЬЧС §ЎС*ЬЏN‰NhС&у
+
+ч 
+‰‹р р Џi‰iШ—‘ШЧ)С)ШЧ%С%Ш"Ч3С3Ш—O‘OШ—‘ШЧ%С%ШЧ'С'Ш$Ь6џ?™?Ё\С9ё1У=ср у    z/api/master/lessons)Ъresponse_modelЪstatus_codeЪdataЪ_c           
+      у   • [        U R                  U R                  U R                  U R                  U R
+                  U R                  SS9nUR                  U5        UR                  5         UR                  U5        U$ )NT)r   r   r   r   r   r   r   )
+r
+   r   r   r   r   r   r   ЪaddЪcommitЪrefresh)r+   r   r,   r   s       r&   Ъcreate_lessonr1   '   sf   Ђ ф ШЏj‰jШЧ$С$Ш—.‘.ШЧ.С.Ш—‘ШЏj‰jШсЂFр ‡FЃF€6„NШ‡IЃI„KШ‡JЃJ€vФШЂMr(   )r)   c                 уД   • U R                  [        5      R                  [        R                  5      R	                  5       nU Vs/ s H  n[        X05      PM     sn$ s  snf )N)r!   r
+   Ъorder_byr   Ъallr'   )r   r,   Ъlessonsr   s       r&   Ъmaster_lessonsr6   A   sM   Ђ р 	Џ‰”УЯ	‰”&Ч"С"У	#Я	‰‹р с
+ :AУAєЁvФvЦ*№СAРAщТAs   БAz/api/lessonsc                 у  • U R                  [        5      R                  [        R                  R	                  S5      5      R                  [        R                  5      R                  5       nU Vs/ s H  n[        X05      PM     sn$ s  snf )uD   Р Р°СЃРїРёСЃР°РЅРёРµ РґР»СЏ Р°РІС‚РѕСЂРёР·РѕРІР°РЅРЅРѕР№ СЃРµРјСЊРё.T)	r!   r
+   r"   r   Ъis_r3   r   r4   r'   )r   Ъfamilyr5   r   s       r&   Ъpublic_lessonsr:   Q   sh   Ђ р 	Џ‰”УЯ	‰”Ч С Ч$С$ TУ*У	+Я	‰”&Ч"С"У	#Я	‰‹р	 с :AУAєЁvФvЦ*№СAРAщТAs   Б1B	z/api/lessons/{lesson_id}r#   c                 у  • UR                  [        5      R                  [        R                  U :H  [        R                  R                  S5      5      R                  5       nUc  [        [        R                  SS9e[        X15      $ )NTu"   Р—Р°РЅСЏС‚РёРµ РЅРµ РЅР°Р№РґРµРЅРѕ)r*   Ъdetail)r!   r
+   r"   r   r   r8   Ъfirstr   r   ЪHTTP_404_NOT_FOUNDr'   )r#   r   r9   r   s       r&   Ъ
+get_lessonr?   c   su   Ђ р 	Џ‰”УЯ	‰ЬЏI‰IС"ЬЧСЧ С  У&у
+
+ч 
+‰‹р р Ѓ~ЬЬЧ1С1Ш7с
+р 	
+ф
+ fУ)Р)r(   N)Ъfastapir   r   r   r   Ъsqlalchemy.ormr   Ъdatabaser	   Ъmodelsr
+   r   Ъschemasr   r   r   Ъsecurityr   r   Ъrouterr'   ЪpostЪHTTP_201_CREATEDЪboolr1   ЪgetЪlistr6   r:   Ъintr?   © r(   r&   Ъ<module>rN      s„  рз =У =Э "е Я $Я HС HЯ =б	Р)Р*С	+Ђрvр Ё7ф р4 ‡ЃШШ!ШЧ'С'р р с &“/ЩР(У)сШ
+рарр фур
+р* ‡ЃШШР,С-р р с
+ &“/ЩР(У)с	BШр	Bаф	Bу	р	Bр ‡ЃШШР,С-р р с
+ &“/ЩР%У&сBШфBу	рBр ‡ЃШШ'р р с &“/ЩР%У&с*Шр*аф*у	с*r(   
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\routers\__pycache__\master.cpython-313.pyc ---
+
+у
+    8шj~  г            
+       уј  • S SK J r   S SKJrJrJrJr  S SKJr  SSKJ	r	  SSK
+JrJrJr  SSKJrJrJrJrJrJrJrJr  SSKJrJrJr  \" S	S
+/S9r\R9                  S\S9S\4S j5       r\R=                  S5      \" \5      4S\4S jj5       r \R9                  S\\RB                  S9\" \	5      \" \5      4S\S\S\4S jj5       r"\R9                  S\\RB                  S9\" \	5      \" \5      4S\#S\S\S\4S jj5       r$\R9                  S\S9\" \	5      \" \5      4S\#S\S\4S jj5       r%\R9                  S\S9\" \	5      \" \5      4S\#S\S\4S jj5       r&g)й    )Ъdatetime)Ъ	APIRouterЪDependsЪHTTPExceptionЪstatus)ЪSessionй   )Ъget_db)ЪFamilyЪChildЪFamilyToken)ЪMasterLoginЪMasterLoginResponseЪFamilyCreateЪFamilyResponseЪChildCreateЪChildResponseЪFamilyLinkResponseЪMessageResponse)Ъcreate_master_sessionЪgenerate_family_tokenЪget_current_masterz/api/masteru   РњР°СЃС‚РµСЂ)ЪprefixЪtagsz/login)Ъresponse_modelЪdatac                 у6   • [        U R                  5      nUSS.$ )NЪbearer)Ъaccess_tokenЪ
+token_type)r   Ъpassword)r   Ъtokens     ф=   C:\Users\РјР°РєСЃ\Desktop\yasna\backend\app\routers\master.pyЪmaster_loginr$      s    Ђ д! $§-Ў-У0ЂEаШср у    z/meЪ_c                 у   • SSS.$ )NTЪmaster)ЪauthenticatedЪrole© )r&   s    r#   Ъ	master_mer,   %   s   Ђ а!Ё8С4Р4r%   z	/families)r   Ъstatus_codeЪdbc                 у¦   • [        U R                  U R                  S9nUR                  U5        UR	                  5         UR                  U5        U$ )N)ЪnameЪphone)r   r0   r1   ЪaddЪcommitЪrefresh)r   r.   r&   Ъfamilys       r#   Ъcreate_familyr6   *   sC   Ђ ф ШЏY‰YШЏj‰jсЂFр ‡FЃF€6„NШ‡IЃI„KШ‡JЃJ€vФШЂMr%   z/families/{family_id}/childrenЪ	family_idc                 уЋ  • UR                  [        5      R                  [        R                  U :H  5      R	                  5       nUc  [        [        R                  SS9e[        UR                  UR                  UR                  UR                  S9nUR                  U5        UR                  5         UR                  U5        U$ )Nх   РЎРµРјСЊСЏ РЅРµ РЅР°Р№РґРµРЅР°©r-   Ъdetail)r7   Ъ
+first_nameЪ	last_nameЪ
+birth_date)Ъqueryr   ЪfilterЪidЪfirstr   r   ЪHTTP_404_NOT_FOUNDr   r<   r=   r>   r2   r3   r4   )r7   r   r.   r&   r5   Ъchilds         r#   Ъcreate_childrE   >   sњ   Ђ р ЏX‰X”fУЧ$С$¤V§YЎY°)С%;У<ЧBСBУDЂFаЃ~ЬЬЧ1С1Ш3с
+р 	
+ф
+ Ш—)‘)Ш—?‘?Ш—.‘.Ш—?‘?с	ЂEр ‡FЃF€5„MШ‡IЃI„KШ‡JЃJ€uФШЂLr%   z/families/{family_id}/linkc                 у<  • UR                  [        5      R                  [        R                  U :H  5      R	                  5       nUc  [        [        R                  SS9eUR                  [        5      R                  [        R                  U :H  [        R                  S:H  5      R                  5       n[        R                  " 5       nU H  nSUl
+        XVl        M     [        5       u  px[        U USS9n	UR!                  U	5        UR#                  5         U USSS.$ )	Nr9   r:   TF)r7   Ъ
+token_hashЪ	is_activer   uZ   РЎРѕС…СЂР°РЅРёС‚Рµ С‚РѕРєРµРЅ: РѕРЅ РїРѕРєР°Р·С‹РІР°РµС‚СЃСЏ С‚РѕР»СЊРєРѕ РѕРґРёРЅ СЂР°Р·.)r7   r   r    Ъmessage)r?   r   r@   rA   rB   r   r   rC   r   r7   rH   Ъallr   ЪutcnowЪ
+revoked_atr   r2   r3   )
+r7   r.   r&   r5   Ъactive_tokensЪnowЪ	old_tokenЪplain_tokenrG   Ъ	new_tokens
+             r#   Ъcreate_family_linkrR   ]   s  Ђ р ЏX‰X”fУЧ$С$¤V§YЎY°)С%;У<ЧBСBУDЂFаЃ~ЬЬЧ1С1Ш3с
+р 	
+р 	Џ‰”УЯ	‰ЬЧ!С! YС.ЬЧ!С! TС)у
+
+ч 
+‰‹р ф Џ/Љ/У
+ЂCЫ"€	Ш#€	ФШ"Цс #ф 4У5СЂKдШШШсЂIр
+ ‡FЃF€9ФШ‡IЃI„Kр Ш#ШШoс	р r%   z!/families/{family_id}/revoke-linkc                 уж  • UR                  [        5      R                  [        R                  U :H  5      R	                  5       nUc  [        [        R                  SS9eUR                  [        5      R                  [        R                  U :H  [        R                  S:H  5      R                  5       n[        R                  " 5       nU H  nSUl
+        XVl        M     UR                  5         SS0$ )Nr9   r:   TFrI   uA   РџРµСЂСЃРѕРЅР°Р»СЊРЅС‹Рµ СЃСЃС‹Р»РєРё СЃРµРјСЊРё РѕС‚РѕР·РІР°РЅС‹)r?   r   r@   rA   rB   r   r   rC   r   r7   rH   rJ   r   rK   rL   r3   )r7   r.   r&   r5   rM   rN   Ъfamily_tokens          r#   Ъrevoke_family_linkrU   Џ   sМ   Ђ р ЏX‰X”fУЧ$С$¤V§YЎY°)С%;У<ЧBСBУDЂFаЃ~ЬЬЧ1С1Ш3с
+р 	
+р 	Џ‰”УЯ	‰ЬЧ!С! YС.ЬЧ!С! TС)у
+
+ч 
+‰‹р ф Џ/Љ/У
+ЂCЫ%€Ш!&€ФШ"%Цс &р ‡IЃI„KШРZР[Р[r%   N)'r   Ъfastapir   r   r   r   Ъsqlalchemy.ormr   Ъdatabaser
+   Ъmodelsr   r   r   Ъschemasr   r   r   r   r   r   r   r   Ъsecurityr   r   r   ЪrouterЪpostr$   ЪgetЪboolr,   ЪHTTP_201_CREATEDr6   ЪintrE   rR   rU   r+   r%   r#   Ъ<module>rb      s  ре з =У =Э "е Я /С /ч	ч 	у 	чс с 
+-Ё~Р.>С	?Ђр ‡Ѓ€XР&9ЂР:рђ{у у ;рр ‡Ѓ€EУЩР 2У3с 5ђф 5у р5р ‡ЃШШ!ШЧ'С'р р с &“/ЩР(У)сШ
+рарр фур
+р ‡ЃШ$Ш ШЧ'С'р р с &“/ЩР(У)с	Шра
+рр 	рр ф	ур
+р4 ‡ЃШ Ш%р р с &“/ЩР(У)с+Шр+ар+р ф+у	р+р\ ‡ЃШ'Ш"р р с &“/ЩР(У)с\Шр\ар\р ф\у	с\r%   
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\routers\__pycache__\notifications.cpython-313.pyc ---
+
+у
+    JWшj  г                   уф  • S SK JrJrJr  S SKJrJr  S SKJr  SSK	J
+r
+  SSKJrJr  SSKJrJr  SSKJr  \" S	/S
+9r " S S\5      r\R+                  S\S9\" \
+5      \" \5      4S\S\S\4S jj5       r\R1                  S\\   S9\" \
+5      \" \5      4S\4S jj5       r\R7                  S\S9\" \
+5      \" \5      4S\S\4S jj5       r\R7                  S5      \" \
+5      \" \5      4S\4S jj5       rg)й    )Ъ	APIRouterЪDependsЪHTTPException)Ъ	BaseModelЪField)ЪSessionй   )Ъget_db)Ъget_current_masterЪget_current_family)ЪNotificationЪFamily)ЪNotificationResponseu   РЈРІРµРґРѕРјР»РµРЅРёСЏ)Ъtagsc                   уF   • \ rS rSr% \" SSS9r\\S'   \" SSS9r\\S'   Sr	g	)
+ЪNotificationCreateй   й   йИ   )Ъ
+min_lengthЪ
+max_lengthЪtitleiР  Ъmessage© N)
+Ъ__name__Ъ
+__module__Ъ__qualname__Ъ__firstlineno__r   r   ЪstrЪ__annotations__r   Ъ__static_attributes__r   у    фD   C:\Users\РјР°РєСЃ\Desktop\yasna\backend\app\routers\notifications.pyr   r      s$   ‡ Щ !°С4ЂE€3У4Щ A°$С7ЂG€SЦ7r"   r   z./api/master/families/{family_id}/notifications)Ъresponse_modelЪ	family_idЪpayloadЪdbc                 уR  • UR                  [        5      R                  [        R                  U :H  5      R	                  5       nU(       d
+  [        SSS9e[        U UR                  UR                  SS9nUR                  U5        UR                  5         UR                  U5        U$ )Nй”  u   РЎРµРјСЊСЏ РЅРµ РЅР°Р№РґРµРЅР°©Ъstatus_codeЪdetailF)r%   r   r   Ъis_read)Ъqueryr   ЪfilterЪidЪfirstr   r   r   r   ЪaddЪcommitЪrefresh)r%   r&   r'   ЪmasterЪfamilyЪnotifications         r#   Ъcreate_notificationr8      s”   Ђ р ЏX‰X”fУЧ$С$ЬЏ	‰	ђYСузЃeѓgр ц ЬШШ3с
+р 	
+ф
+  ШШЏm‰mШ—‘Шс	ЂLр ‡FЃF€<ФШ‡IЃI„KШ‡JЃJ€|ФаРr"   z/api/family/notificationsc                 ут   • U R                  [        5      R                  [        R                  UR                  :H  5      R                  [        R                  R                  5       5      R                  5       $ )N)	r.   r   r/   r%   r0   Ъorder_byЪ
+created_atЪdescЪall©r'   r6   s     r#   Ъget_family_notificationsr?   8   sN   Ђ р 	Џ‰”УЯ	‰”Ч&С&Ё&Ї)©)С3У	4Я	‰”,Ч)С)Ч.С.У0У	1Я	‰‹р	r"   z0/api/family/notifications/{notification_id}/readЪnotification_idc                 у6  • UR                  [        5      R                  [        R                  U :H  [        R                  UR                  :H  5      R                  5       nU(       d
+  [        SSS9eSUl        UR                  5         UR                  U5        U$ )Nr)   u*   РЈРІРµРґРѕРјР»РµРЅРёРµ РЅРµ РЅР°Р№РґРµРЅРѕr*   T)
+r.   r   r/   r0   r%   r1   r   r-   r3   r4   )r@   r'   r6   r7   s       r#   Ъmark_notification_readrB   I   sѓ   Ђ р 	Џ‰”УЯ	‰ЬЏO‰OС.ЬЧ"С" f§iЎiС/у
+
+ч 
+‰‹р ц ЬШШ?с
+р 	
+р
+  ЂLФа‡IЃI„KШ‡JЃJ€|ФаРr"   z"/api/family/notifications/read-allc                 у"  • U R                  [        5      R                  [        R                  UR                  :H  [        R
+                  R                  S5      5      R                  [        R
+                  S0SS9  U R                  5         SSS.$ )NFT)Ъsynchronize_sessionЪokuG   Р’СЃРµ СѓРІРµРґРѕРјР»РµРЅРёСЏ РѕС‚РјРµС‡РµРЅС‹ РїСЂРѕС‡РёС‚Р°РЅРЅС‹РјРё)Ъstatusr   )	r.   r   r/   r%   r0   r-   Ъis_Ъupdater3   r>   s     r#   Ъmark_all_notifications_readrI   j   sЂ   Ђ р
+ ‡HЃHЊ\УЧ!С!ЬЧС &§)Ў)С+ЬЧСЧ С  У'уч ЃfЬ	Ч	С	tР$Ш!р с р
+ ‡IЃI„Kр Ш\ср r"   N)Ъfastapir   r   r   Ъpydanticr   r   Ъsqlalchemy.ormr   Ъdatabaser
+   Ъsecurityr   r   Ъmodelsr   r   Ъschemasr   Ъrouterr   ЪpostЪintr8   ЪgetЪlistr?   ЪpatchrB   rI   r   r"   r#   Ъ<module>rW      sU  рз 5С 5Я %Э "е Я =Я )Э *с 
+Р1Р2С	3Ђф8ф 8р ‡ЃШ4Ш'р р с &“/ЩР%У&с	Шрарр 	фу	рр> ‡ЃШШР,С-р р с
+ &“/ЩР%У&с	Шф	у	р	р ‡ЃШ6Ш'р р с &“/ЩР%У&сШрафу	рр: ‡ЃР2У3б&“/ЩР%У&сШфу 4сr"   
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\routers\__pycache__\payments.cpython-313.pyc ---
+
+у
+    *Uшj:	  г                   уЮ  • S SK JrJr  S SKJr  SSKJr  SSKJrJ	r	  SSK
+JrJrJr  SSKJrJrJrJr  \" S/S	9r\R)                  S
+\S9\" \5      \" \	5      4S\S\4S jj5       r\R-                  S
+\\   S9\" \5      \" \	5      4S\4S jj5       r\R-                  S\\   S9\" \5      \" \5      4S\4S jj5       r\R5                  S\S9\" \5      \" \5      4S\S\S\4S jj5       rg)й    )Ъ	APIRouterЪDepends)ЪSessionй   )Ъget_db)Ъget_current_masterЪget_current_family)ЪPaymentCreateЪPaymentResponseЪPaymentStatusUpdate)Ъcreate_paymentЪget_family_paymentsЪget_all_paymentsЪupdate_payment_statusu   РџР»Р°С‚РµР¶Рё)Ъtagsz/api/family/payments)Ъresponse_modelЪpayloadЪdbc                 уо   • U R                   UR                  :w  a  SSKJn  U" SSS9eU R                  c  SSKJn  U" SSS9e[        UUR                  U R                  U R                  U R                  S9$ )	Nr   )ЪHTTPExceptioni“  uG   РќРµР»СЊР·СЏ СЃРѕР·РґР°С‚СЊ РїР»Р°С‚С‘Р¶ РґР»СЏ РґСЂСѓРіРѕР№ СЃРµРјСЊРё)Ъstatus_codeЪdetailiђ  uJ   Р”Р»СЏ РѕРїР»Р°С‚С‹ РЅРµРѕР±С…РѕРґРёРјРѕ СѓРєР°Р·Р°С‚СЊ Р°Р±РѕРЅРµРјРµРЅС‚)r   Ъ	family_idЪsubscription_idЪamountЪpayment_method)r   ЪidЪfastapir   r   r   r   r   )r   r   Ъfamilyr   s       ф?   C:\Users\РјР°РєСЃ\Desktop\yasna\backend\app\routers\payments.pyЪfamily_create_paymentr!      s‚   Ђ р ЧСFџI™IУ%Э)ЩШШ\с
+р 	
+р
+ ЧСС&Э)ЩШШ_с
+р 	
+ф
+ ШШ—)‘)ШЧ/С/ШЏ~‰~ШЧ-С-ср у    c                 у,   • [        XR                  5      $ ©N)r   r   )r   r   s     r    Ъfamily_paymentsr%   9   s   Ђ ф r§9Ў9У-Р-r"   z/api/master/paymentsc                 у   • [        U 5      $ r$   )r   )r   Ъmasters     r    Ъmaster_paymentsr(   F   s   Ђ ф BУРr"   z(/api/master/payments/{payment_id}/statusЪ
+payment_idc                 у,   • [        UU UR                  S9$ )N)r   r)   Ъ
+new_status)r   Ъstatus)r)   r   r   r'   s       r    Ъmaster_update_paymentr-   Q   s   Ђ ф !ШШШ—>‘>ср r"   N)r   r   r   Ъsqlalchemy.ormr   Ъdatabaser   Ъsecurityr   r	   Ъschemasr
+   r   r   Ъservices.payment_servicer   r   r   r   ЪrouterЪpostr!   ЪgetЪlistr%   r(   ЪpatchЪintr-   © r"   r    Ъ<module>r:      sa  рз &Э "е Я =чс ч
+у с 
+Р)Р*С	+Ђр
+ ‡ЃШШ"р р с &“/ЩР%У&сШрафу	рр8 ‡ЃШШС(р р с
+ &“/ЩР%У&с.Шф.у	р.р ‡ЃШШС(р р с
+ &“/ЩР%У&с Шф у	р р ‡ЃШ.Ш"р р с &“/ЩР%У&с	
+Шр
+а р
+р 	ф
+у	с
+r"   
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\routers\__pycache__\receipts.cpython-313.pyc ---
+
+у
+    ~Wшj­  г                   уv  • S SK Jr  S SKJr  S SKJrJrJrJrJ	r	  S SK
+Jr  S SKJr  SSKJr  SSKJrJr  SS	KJrJr  SS
+KJrJr  \" S/S9r\" \5      R7                  5       R8                  S   S-  S-  r1 SkrSr\RA                  S\S9\" \5      \" \5      4S\!S\S\4S jj5       r"\RA                  S\S9\	" S5      \" \5      \" \5      4S\!S\S\4S jj5       r#\RI                  S\%\   S9\" \5      \" \5      4S\!S\4S jj5       r&\RI                  S5      \" \5      \" \5      4S\!S\4S jj5       r'g )!й    )ЪPath)Ъuuid4)Ъ	APIRouterЪDependsЪHTTPExceptionЪ
+UploadFileЪFile)ЪFileResponse)ЪSessionй   )Ъget_db)Ъget_current_masterЪget_current_family)ЪPaymentЪReceipt)ЪReceiptLinkCreateЪReceiptResponseu   Р§РµРєРё Рё РєРІРёС‚Р°РЅС†РёРё)ЪtagsЪuploadsЪreceipts>   ъ.jpgъ.pdfъ.pngъ.jpegi  P z./api/master/payments/{payment_id}/receipt/link)Ъresponse_modelЪ
+payment_idЪpayloadЪdbc                 уИ  • UR                  [        5      R                  [        R                  U :H  5      R	                  5       nU(       d  [        SS5      eUR                  S:w  a  [        SS5      e[        U [        UR                  5      S9n UR                  U5        UR                  5         UR                  U5        U$ ! [         a    UR                  5         e f = f)Nй”  х   РџР»Р°С‚С‘Р¶ РЅРµ РЅР°Р№РґРµРЅЪ	succeededйђ  хX   Р§РµРє РјРѕР¶РЅРѕ РїСЂРёРєСЂРµРїРёС‚СЊ С‚РѕР»СЊРєРѕ Рє СѓСЃРїРµС€РЅРѕРјСѓ РїР»Р°С‚РµР¶Сѓ)r   Ъreceipt_url)Ъqueryr   ЪfilterЪidЪfirstr   Ъstatusr   Ъstrr%   ЪaddЪcommitЪrefreshЪ	ExceptionЪrollback)r   r   r   ЪmasterЪpaymentЪreceipts         ф?   C:\Users\РјР°РєСЃ\Desktop\yasna\backend\app\routers\receipts.pyЪadd_receipt_linkr5      sЗ   Ђ р Џh‰h”wУЧ&С&ЬЏ
+‰
+ђjС узЃeѓgр ц ЬCР!AУBРBа‡~Ѓ~У$ЬШШfу
+р 	
+ф
+ ШЬЧ+С+У,сЂGр
+Ш
+Џ‰€wЊШ
+Џ	‰	ЊШ
+Џ
+‰
+ђ7ФШ€шЬу Ш
+Џ‰ЊШръs   В3C ГC!z./api/master/payments/{payment_id}/receipt/file.Ъfilec              ѓ   у  #   • UR                  [        5      R                  [        R                  U :H  5      R	                  5       nU(       d  [        SS5      eUR                  S:w  a  [        SS5      e[        UR                  =(       d    S5      R                  R                  5       nU[        ;  a  [        SS5      eUR                  [        S-   5      I S h  v•N nU(       d  [        SS	5      e[        U5      [        :”  a  [        SS
+5      e[        R!                  SSS9  [#        5       R$                   U 3n[        U-  n UR'                  U5        [)        U US9n	UR+                  U	5        UR-                  5         UR/                  U	5        U	UR1                  5       I S h  v•N   $  NУ N! [2         a!    UR5                  5         UR7                  SS9  e f = f! UR1                  5       I S h  v•N    f = f7f)Nr    r!   r"   r#   r$   Ъ u5   Р Р°Р·СЂРµС€РµРЅС‹ С‚РѕР»СЊРєРѕ PDF, PNG, JPG Рё JPEGй   u   Р¤Р°Р№Р» РїСѓСЃС‚РѕР№u;   РњР°РєСЃРёРјР°Р»СЊРЅС‹Р№ СЂР°Р·РјРµСЂ С„Р°Р№Р»Р° вЂ” 5 РњР‘T)ЪparentsЪexist_ok)r   Ъ	file_path)Ъ
+missing_ok)r&   r   r'   r(   r)   r   r*   r   ЪfilenameЪsuffixЪlowerЪALLOWED_EXTENSIONSЪreadЪMAX_FILE_SIZEЪlenЪ
+UPLOAD_DIRЪmkdirr   ЪhexЪwrite_bytesr   r,   r-   r.   Ъcloser/   r0   Ъunlink)
+r   r6   r   r1   r2   Ъ	extensionЪcontentr>   Ъdestinationr3   s
+             r4   Ъupload_receipt_filerN   F   sА  й Ђ р Џh‰h”wУЧ&С&ЬЏ
+‰
+ђjС узЃeѓgр ц ЬCР!AУBРBа‡~Ѓ~У$ЬШШfу
+р 	
+ф
+ ђT—]‘]Ч( bУ)Ч0С0Ч6С6У8ЂIаФ*У*ЬШШCу
+р 	
+р
+ —I‘IњmЁaС/У0Ч0ЂGжЬCР!8У9Р9д
+€7ѓ|”mУ#ЬCР!^У_Р_дЧСTЁDРС1д“'—+‘+ђykР*ЂHЬxС'ЂKрШЧС Ф(дШ!Шс
+€р
+ 	Џ‰€wЊШ
+Џ	‰	ЊШ
+Џ
+‰
+ђ7Фар Џj‰j‹lЧСсC 1сB 	шф у Ш
+Џ‰ЊШЧС dРС+Шрыр Џj‰j‹lЧТьsV   ‚CH ГF0ГA+H Е	AF4 ЖH Ж*F2Ж+H Ж2H Ж4+GЗG" З"G=З6G9З7G=З=H z)/api/family/payments/{payment_id}/receiptc                 уВ  • UR                  [        5      R                  [        R                  U :H  [        R                  UR                  :H  5      R                  5       nU(       d  [        SS5      eUR                  [        5      R                  [        R                  U :H  5      R                  [        R                  R                  5       5      R                  5       $ )Nr    r!   )r&   r   r'   r(   Ъ	family_idr)   r   r   r   Ъorder_byЪ
+created_atЪdescЪall)r   r   Ъfamilyr2   s       r4   Ъget_family_receiptsrV   ‹   sў   Ђ р Џh‰h”wУЧ&С&ЬЏ
+‰
+ђjС ЬЧСVџY™YС&уч Ѓeѓgр ц
+ ЬCР!AУBРBр 	Џ‰”УЯ	‰”Ч"С" jС0У	1Я	‰”'Ч$С$Ч)С)У+У	,Я	‰‹р	у    z*/api/family/receipts/{receipt_id}/downloadЪ
+receipt_idc                 у>  • UR                  [        5      R                  [        [        R                  [        R
+                  :H  5      R                  [        R
+                  U :H  [        R                  UR
+                  :H  5      R                  5       nU(       d  [        SS5      eUR                  (       d  [        SS5      e[        [        UR                  5      R                  -  nUR                  5       (       d  [        SS5      e[        UUR                  SS9$ )Nr    u   Р§РµРє РЅРµ РЅР°Р№РґРµРЅr#   uJ   Р”Р»СЏ СЌС‚РѕРіРѕ С‡РµРєР° РґРѕСЃС‚СѓРїРЅР° СЃСЃС‹Р»РєР°, Р° РЅРµ С„Р°Р№Р»u7   Р¤Р°Р№Р» С‡РµРєР° РЅРµ РЅР°Р№РґРµРЅ РЅР° СЃРµСЂРІРµСЂРµzapplication/octet-stream)Ъpathr>   Ъ
+media_type)r&   r   Ъjoinr   r   r(   r'   rP   r)   r   r<   rE   r   ЪnameЪis_filer
+   )rX   r   rU   r3   r<   s        r4   Ъdownload_family_receiptr_   ¦   sд   Ђ р 	Џ‰”УЯ	‰Њg”wЧ)С)¬WЇZ©ZС7У	8Я	‰ЬЏJ‰J*С$ЬЧС §ЎС*у
+
+ч 
+‰‹р ц ЬCР!;У<Р<аЧЧЬШШXу
+р 	
+ф
+ њT 'Ч"3С"3У4Ч9С9С9ЂIаЧСЧСЬCР!ZУ[Р[дШШ—‘Ш-ср rW   N)(Ъpathlibr   Ъuuidr   Ъfastapir   r   r   r   r	   Ъfastapi.responsesr
+   Ъsqlalchemy.ormr   Ъdatabaser   Ъsecurityr   r   Ъmodelsr   r   Ъschemasr   r   ЪrouterЪ__file__Ъresolver:   rE   rA   rC   ЪpostЪintr5   rN   ЪgetЪlistrV   r_   © rW   r4   Ъ<module>rq      s­  ре Э чх х +Э "е Я =Я %Я 8с 
+Р9Р:С	;Ђбђ(‹^Ч#С#У%Ч-С-ЁaС0°9С<ёzСIЂ
+Ъ6Р ШЂр
+ ‡ЃШ4Ш"р р с &“/ЩР%У&с	Шрарр 	фу	ррH ‡ЃШ4Ш"р р с C“yЩ&“/ЩР%У&с	<Шр<а
+р<р 	ф<у	р<рB ‡ЃШ/ШС(р р с &“/ЩР%У&сШрафу	рр. ‡ЃШ0ус
+ &“/ЩР%У&с!Шр!аф!ус!rW   
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\routers\__pycache__\reports.cpython-313.pyc ---
+
+у
+    `Xшj  г                   уѕ   • S SK JrJrJr  S SKJr  S SKJr  SSKJ	r	  SSK
+Jr  SSKJr  \" SS	/S
+9r\R                  S5      \" \	5      \" \5      4S\S\4S jj5       rg)й    )Ъ	APIRouterЪDependsЪHTTPException)ЪResponse)ЪSessionй   )Ъget_db)Ъget_current_master)ЪEXPORTSz/api/master/reportsu   РћС‚С‡С‘С‚С‹)ЪprefixЪtagsz/{report_type}/csvЪreport_typeЪdbc                 уz   • [         R                  " U 5      nUc
+  [        SSS9eU" U5      n[        USSSU  S30S9$ )	Ni”  u8   РўР°РєРѕР№ С‚РёРї РѕС‚С‡С‘С‚Р° РЅРµ СЃСѓС‰РµСЃС‚РІСѓРµС‚)Ъstatus_codeЪdetailztext/csv; charset=utf-8zContent-Dispositionzattachment; filename="z_report.csv")ЪcontentЪ
+media_typeЪheaders)r   Ъgetr   r   )r   r   ЪmasterЪexport_functionЪcsv_contents        ф>   C:\Users\РјР°РєСЃ\Desktop\yasna\backend\app\routers\reports.pyЪdownload_reportr      s^   Ђ ф —k’k +У.ЂOаСЬШШMс
+р 	
+с
+ " "У%ЂKдШШ,а!Ш(ЁЁ°\РBр
+ср у    N)Ъfastapir   r   r   Ъfastapi.responsesr   Ъsqlalchemy.ormr   Ъdatabaser	   Ъsecurityr
+   Ъservices.export_servicer   Ъrouterr   Ъstrr   © r   r   Ъ<module>r&      so   рз 5С 5Э &Э "е Э )Э -с 
+Ш Ш
+Р	с
+Ђр ‡ЃР У!с &“/ЩР%У&сШрафу "сr   
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\routers\__pycache__\subscriptions.cpython-313.pyc ---
+
+у
+    †NшjP  г                   уЦ  • S SK JrJrJr  S SKJr  SSKJr  SSKJ	r	J
+r
+Jr  SSKJrJrJr  SSKJrJr  \" S/S	9r\R)                  S
+\S9\" \5      \" \5      4S\S\4S jj5       r\R-                  S
+\\   S9\" \5      \" \5      4S\4S jj5       r\R-                  S\\   S9\" \5      \" \5      4S\4S jj5       r\R-                  S\S9\" \5      \" \5      4S\4S jj5       rg)й    )Ъ	APIRouterЪDependsЪHTTPException)ЪSessionй   )Ъget_db)ЪFamilyЪChildЪSubscription)ЪSubscriptionCreateЪSubscriptionResponseЪSubscriptionBalance)Ъget_current_masterЪget_current_familyu   РђР±РѕРЅРµРјРµРЅС‚С‹)Ъtagsz/api/master/subscriptions)Ъresponse_modelЪpayloadЪdbc                 уМ  • UR                  [        5      R                  [        R                  U R                  :H  5      R                  5       nU(       d
+  [        SSS9eU R                  bz  UR                  [        5      R                  [        R                  U R                  :H  [        R                  U R                  :H  5      R                  5       nU(       d
+  [        SSS9e[        U R                  U R                  U R                  U R                  SU R                  U R                  SS9nUR                  U5        UR                  5         UR!                  U5        U$ )Ni”  u   РЎРµРјСЊСЏ РЅРµ РЅР°Р№РґРµРЅР°)Ъstatus_codeЪdetailu7   Р РµР±С‘РЅРѕРє РЅРµ РЅР°Р№РґРµРЅ РІ СЌС‚РѕР№ СЃРµРјСЊРµr   T)Ъ	family_idЪchild_idЪtitleЪtotal_lessonsЪused_lessonsЪpriceЪ
+expires_atЪ	is_active)Ъqueryr	   ЪfilterЪidr   Ъfirstr   r   r
+   r   r   r   r   r   ЪaddЪcommitЪrefresh)r   r   ЪmasterЪfamilyЪchildЪsubscriptions         фD   C:\Users\РјР°РєСЃ\Desktop\yasna\backend\app\routers\subscriptions.pyЪcreate_subscriptionr,      s,  Ђ р ЏX‰X”fУЧ$С$ЬЏ	‰	ђWЧ&С&С&узЃeѓgр ц ЬШШ3с
+р 	
+р
+ ЧСС#Ш—‘њ“Ч&С&ЬЏH‰HЧ(С(С(ЬЏO‰OwЧ0С0С0у
+ч ‰%‹'р 	ц
+ ЬШШPср ф
+  ШЧ#С#ШЧ!С!ШЏm‰mШЧ+С+ШШЏm‰mШЧ%С%Шс	ЂLр ‡FЃF€<ФШ‡IЃI„KШ‡JЃJ€|ФаРу    c                 ућ   • U R                  [        5      R                  [        R                  R	                  5       5      R                  5       $ ©N)r    r   Ъorder_byЪ
+created_atЪdescЪall)r   r'   s     r+   Ъget_all_subscriptionsr4   D   s5   Ђ р 	Џ‰”УЯ	‰”,Ч)С)Ч.С.У0У	1Я	‰‹рr-   z/api/family/subscriptionsc                 ут   • U R                  [        5      R                  [        R                  UR                  :H  5      R                  [        R                  R                  5       5      R                  5       $ r/   )	r    r   r!   r   r"   r0   r1   r2   r3   )r   r(   s     r+   Ъget_family_subscriptionsr6   T   sN   Ђ р 	Џ‰”УЯ	‰”Ч&С&Ё&Ї)©)С3У	4Я	‰”,Ч)С)Ч.С.У0У	1Я	‰‹р	r-   z!/api/family/subscriptions/balancec                 уF  • U R                  [        5      R                  [        R                  UR                  :H  [        R
+                  R                  S5      5      R                  5       n[        S U 5       5      n[        S U 5       5      nUU[        SX4-
+  5      SS.$ )NTc              3   у8   #   • U  H  oR                   v •  M     g 7fr/   )r   ©Ъ.0Ъitems     r+   Ъ	<genexpr>Ъ2get_family_subscription_balance.<locals>.<genexpr>v   s   й Ђ Р=Є} tЧ"Ц"Є}щу   ‚c              3   у8   #   • U  H  oR                   v •  M     g 7fr/   )r   r9   s     r+   r<   r=   w   s   й Ђ Р;Є] TЧ Ц Є]щr>   r   )r   r   Ъremaining_lessonsЪmoney_balance)
+r    r   r!   r   r"   r   Ъis_r3   ЪsumЪmax)r   r(   ЪsubscriptionsЪtotalЪuseds        r+   Ъget_family_subscription_balancerH   e   s‘   Ђ р 	Џ‰”УЯ	‰ЬЧ"С" f§iЎiС/ЬЧ"С"Ч&С& tУ,у
+
+ч 
+‰‹р ф С=©}У=У=ЂEЬС;©]У;У;ЂDр ШЬ   EЎLУ1Шс	р r-   N)Ъfastapir   r   r   Ъsqlalchemy.ormr   Ъdatabaser   Ъmodelsr	   r
+   r   Ъschemasr   r   r   Ъsecurityr   r   ЪrouterЪpostr,   ЪgetЪlistr4   r6   rH   © r-   r+   Ъ<module>rT      sS  рЯ 5С 5Э "е Я 0С 0чс ч
+ >с 
+Р/Р0С	1Ђр ‡ЃШШ'р р с &“/ЩР%У&с*Шр*аф*у	р*р\ ‡ЃШШР,С-р р с
+ &“/ЩР%У&сШфу	рр ‡ЃШШР,С-р р с
+ &“/ЩР%У&с	Шф	у	р	р ‡ЃШ'Ш&р р с
+ &“/ЩР%У&сШфу	сr-   
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\routers\__pycache__\__init__.cpython-313.pyc ---
+
+у
+    B1шj    г                   у   • g )N© r   у    ф?   C:\Users\РјР°РєСЃ\Desktop\yasna\backend\app\routers\__init__.pyЪ<module>r      s   сr   
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\services\attendance_service.py ---
+
+
+from datetime import datetime
+
+from fastapi import HTTPException
+from sqlalchemy.orm import Session
+
+from ..models import (
+    Booking,
+    Child,
+    Attendance,
+    AttendanceHistory,
+    Subscription,
+    LessonTransaction,
+)
+
+
+VALID_STATUSES = {"attended", "missed", "cancelled"}
+
+
+def mark_attendance(
+    db: Session,
+    booking_id: int,
+    new_status: str,
+    comment: str | None = None,
+):
+    if new_status not in VALID_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail="РќРµРґРѕРїСѓСЃС‚РёРјС‹Р№ СЃС‚Р°С‚СѓСЃ РїРѕСЃРµС‰Р°РµРјРѕСЃС‚Рё",
+        )
+
+    booking = db.query(Booking).filter(
+        Booking.id == booking_id
+    ).first()
+
+    if not booking:
+        raise HTTPException(
+            status_code=404,
+            detail="Р—Р°РїРёСЃСЊ РЅРµ РЅР°Р№РґРµРЅР°",
+        )
+
+    if booking.status != "booked":
+        raise HTTPException(
+            status_code=400,
+            detail="РќРµР»СЊР·СЏ РѕС‚РјРµС‚РёС‚СЊ РїРѕСЃРµС‰Р°РµРјРѕСЃС‚СЊ РѕС‚РјРµРЅС‘РЅРЅРѕР№ Р·Р°РїРёСЃРё",
+        )
+
+    attendance = db.query(Attendance).filter(
+        Attendance.booking_id == booking_id
+    ).first()
+
+    old_status = attendance.status if attendance else None
+
+    if attendance is None:
+        attendance = Attendance(
+            booking_id=booking_id,
+            status=new_status,
+            marked_at=datetime.utcnow(),
+        )
+        db.add(attendance)
+        db.flush()
+    else:
+        if old_status == new_status:
+            return attendance
+
+        history = AttendanceHistory(
+            attendance_id=attendance.id,
+            old_status=old_status,
+            new_status=new_status,
+            changed_at=datetime.utcnow(),
+            comment=comment,
+        )
+        db.add(history)
+
+        attendance.status = new_status
+        attendance.marked_at = datetime.utcnow()
+
+    # РќР°С…РѕРґРёРј РїРѕСЃР»РµРґРЅСЋСЋ РѕРїРµСЂР°С†РёСЋ РїРѕ СЌС‚РѕРјСѓ Р±СЂРѕРЅРёСЂРѕРІР°РЅРёСЋ.
+    last_transaction = (
+        db.query(LessonTransaction)
+        .filter(LessonTransaction.booking_id == booking_id)
+        .order_by(
+            LessonTransaction.created_at.desc(),
+            LessonTransaction.id.desc(),
+        )
+        .first()
+    )
+
+    # Р•СЃР»Рё СЂРµР±С‘РЅРѕРє РїРѕСЃРµС‚РёР» Р·Р°РЅСЏС‚РёРµ вЂ” СЃРїРёСЃС‹РІР°РµРј РѕРґРЅРѕ Р·Р°РЅСЏС‚РёРµ.
+    if new_status == "attended":
+        if last_transaction and last_transaction.operation == "use":
+            pass
+
+        elif last_transaction and last_transaction.operation == "refund":
+            # РџРѕРІС‚РѕСЂРЅРѕ РѕС‚РјРµС‡Р°РµРј РїРѕСЃРµС‰РµРЅРёРµ РїРѕСЃР»Рµ РѕС‚РјРµРЅС‹ РѕС‚РјРµС‚РєРё.
+            subscription = db.query(Subscription).filter(
+                Subscription.id == last_transaction.subscription_id
+            ).first()
+
+            if subscription:
+                subscription.used_lessons += 1
+
+                db.add(LessonTransaction(
+                    subscription_id=subscription.id,
+                    booking_id=booking_id,
+                    amount=1,
+                    operation="use",
+                    reason="РџРѕРІС‚РѕСЂРЅРѕРµ РїРѕРґС‚РІРµСЂР¶РґРµРЅРёРµ РїРѕСЃРµС‰РµРЅРёСЏ",
+                ))
+
+        else:
+            # РЎРЅР°С‡Р°Р»Р° РёС‰РµРј Р°Р±РѕРЅРµРјРµРЅС‚ РєРѕРЅРєСЂРµС‚РЅРѕРіРѕ СЂРµР±С‘РЅРєР°,
+            # Р·Р°С‚РµРј РѕР±С‰РёР№ Р°Р±РѕРЅРµРјРµРЅС‚ СЃРµРјСЊРё.
+            child = db.query(Child).filter(
+                Child.id == booking.child_id
+            ).first()
+
+            subscription = (
+                db.query(Subscription)
+                .filter(
+                    Subscription.family_id == child.family_id,
+                    Subscription.is_active.is_(True),
+                    Subscription.used_lessons < Subscription.total_lessons,
+                    (
+                        (Subscription.child_id == child.id)
+                        | (Subscription.child_id.is_(None))
+                    ),
+                )
+                .order_by(
+                    Subscription.child_id.is_(None).asc(),
+                    Subscription.created_at.desc(),
+                )
+                .first()
+            )
+
+            if subscription:
+                subscription.used_lessons += 1
+
+                db.add(LessonTransaction(
+                    subscription_id=subscription.id,
+                    booking_id=booking_id,
+                    amount=1,
+                    operation="use",
+                    reason="РџРѕСЃРµС‰РµРЅРёРµ Р·Р°РЅСЏС‚РёСЏ",
+                ))
+
+    # Р•СЃР»Рё РѕС‚РјРµС‚РєСѓ В«РїРѕСЃРµС‚РёР»В» РѕС‚РјРµРЅРёР»Рё вЂ” РІРѕР·РІСЂР°С‰Р°РµРј Р·Р°РЅСЏС‚РёРµ.
+    elif old_status == "attended":
+        if last_transaction and last_transaction.operation == "use":
+            subscription = db.query(Subscription).filter(
+                Subscription.id == last_transaction.subscription_id
+            ).first()
+
+            if subscription:
+                subscription.used_lessons = max(
+                    0,
+                    subscription.used_lessons - 1,
+                )
+
+                db.add(LessonTransaction(
+                    subscription_id=subscription.id,
+                    booking_id=booking_id,
+                    amount=1,
+                    operation="refund",
+                    reason="Р’РѕР·РІСЂР°С‚ Р·Р°РЅСЏС‚РёСЏ РїРѕСЃР»Рµ РёР·РјРµРЅРµРЅРёСЏ РїРѕСЃРµС‰Р°РµРјРѕСЃС‚Рё",
+                ))
+
+    try:
+        db.commit()
+        db.refresh(attendance)
+        return attendance
+    except Exception:
+        db.rollback()
+        raise
+
+
+def get_attendance_history(db: Session, booking_id: int):
+    attendance = db.query(Attendance).filter(
+        Attendance.booking_id == booking_id
+    ).first()
+
+    if not attendance:
+        return []
+
+    return (
+        db.query(AttendanceHistory)
+        .filter(AttendanceHistory.attendance_id == attendance.id)
+        .order_by(AttendanceHistory.changed_at.asc())
+        .all()
+    )
+
+
+VALID_STATUSES = {"attended", "missed", "cancelled"}
+
+
+def mark_attendance(
+    db: Session,
+    booking_id: int,
+    new_status: str,
+    comment: str | None = None,
+):
+    if new_status not in VALID_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail="РќРµРґРѕРїСѓСЃС‚РёРјС‹Р№ СЃС‚Р°С‚СѓСЃ РїРѕСЃРµС‰Р°РµРјРѕСЃС‚Рё",
+        )
+
+    booking = db.query(Booking).filter(
+        Booking.id == booking_id
+    ).first()
+
+    if not booking:
+        raise HTTPException(
+            status_code=404,
+            detail="Р—Р°РїРёСЃСЊ РЅРµ РЅР°Р№РґРµРЅР°",
+        )
+
+    if booking.status != "booked":
+        raise HTTPException(
+            status_code=400,
+            detail="РќРµР»СЊР·СЏ РѕС‚РјРµС‚РёС‚СЊ РїРѕСЃРµС‰Р°РµРјРѕСЃС‚СЊ РѕС‚РјРµРЅС‘РЅРЅРѕР№ Р·Р°РїРёСЃРё",
+        )
+
+    attendance = db.query(Attendance).filter(
+        Attendance.booking_id == booking_id
+    ).first()
+
+    old_status = attendance.status if attendance else None
+
+    if attendance is None:
+        attendance = Attendance(
+            booking_id=booking_id,
+            status=new_status,
+            marked_at=datetime.utcnow(),
+        )
+        db.add(attendance)
+        db.flush()
+    else:
+        if old_status == new_status:
+            return attendance
+
+        history = AttendanceHistory(
+            attendance_id=attendance.id,
+            old_status=old_status,
+            new_status=new_status,
+            changed_at=datetime.utcnow(),
+            comment=comment,
+        )
+        db.add(history)
+
+        attendance.status = new_status
+        attendance.marked_at = datetime.utcnow()
+
+    # РќР°С…РѕРґРёРј РїРѕСЃР»РµРґРЅСЋСЋ РѕРїРµСЂР°С†РёСЋ РїРѕ СЌС‚РѕРјСѓ Р±СЂРѕРЅРёСЂРѕРІР°РЅРёСЋ.
+    last_transaction = (
+        db.query(LessonTransaction)
+        .filter(LessonTransaction.booking_id == booking_id)
+        .order_by(
+            LessonTransaction.created_at.desc(),
+            LessonTransaction.id.desc(),
+        )
+        .first()
+    )
+
+    # Р•СЃР»Рё СЂРµР±С‘РЅРѕРє РїРѕСЃРµС‚РёР» Р·Р°РЅСЏС‚РёРµ вЂ” СЃРїРёСЃС‹РІР°РµРј РѕРґРЅРѕ Р·Р°РЅСЏС‚РёРµ.
+    if new_status == "attended":
+        if last_transaction and last_transaction.operation == "use":
+            pass
+
+        elif last_transaction and last_transaction.operation == "refund":
+            # РџРѕРІС‚РѕСЂРЅРѕ РѕС‚РјРµС‡Р°РµРј РїРѕСЃРµС‰РµРЅРёРµ РїРѕСЃР»Рµ РѕС‚РјРµРЅС‹ РѕС‚РјРµС‚РєРё.
+            subscription = db.query(Subscription).filter(
+                Subscription.id == last_transaction.subscription_id
+            ).first()
+
+            if subscription:
+                subscription.used_lessons += 1
+
+                db.add(LessonTransaction(
+                    subscription_id=subscription.id,
+                    booking_id=booking_id,
+                    amount=1,
+                    operation="use",
+                    reason="РџРѕРІС‚РѕСЂРЅРѕРµ РїРѕРґС‚РІРµСЂР¶РґРµРЅРёРµ РїРѕСЃРµС‰РµРЅРёСЏ",
+                ))
+
+        else:
+            # РЎРЅР°С‡Р°Р»Р° РёС‰РµРј Р°Р±РѕРЅРµРјРµРЅС‚ РєРѕРЅРєСЂРµС‚РЅРѕРіРѕ СЂРµР±С‘РЅРєР°,
+            # Р·Р°С‚РµРј РѕР±С‰РёР№ Р°Р±РѕРЅРµРјРµРЅС‚ СЃРµРјСЊРё.
+            child = db.query(Child).filter(
+                Child.id == booking.child_id
+            ).first()
+
+            subscription = (
+                db.query(Subscription)
+                .filter(
+                    Subscription.family_id == child.family_id,
+                    Subscription.is_active.is_(True),
+                    Subscription.used_lessons < Subscription.total_lessons,
+                    (
+                        (Subscription.child_id == child.id)
+                        | (Subscription.child_id.is_(None))
+                    ),
+                )
+                .order_by(
+                    Subscription.child_id.is_(None).asc(),
+                    Subscription.created_at.desc(),
+                )
+                .first()
+            )
+
+            if subscription:
+                subscription.used_lessons += 1
+
+                db.add(LessonTransaction(
+                    subscription_id=subscription.id,
+                    booking_id=booking_id,
+                    amount=1,
+                    operation="use",
+                    reason="РџРѕСЃРµС‰РµРЅРёРµ Р·Р°РЅСЏС‚РёСЏ",
+                ))
+
+    # Р•СЃР»Рё РѕС‚РјРµС‚РєСѓ В«РїРѕСЃРµС‚РёР»В» РѕС‚РјРµРЅРёР»Рё вЂ” РІРѕР·РІСЂР°С‰Р°РµРј Р·Р°РЅСЏС‚РёРµ.
+    elif old_status == "attended":
+        if last_transaction and last_transaction.operation == "use":
+            subscription = db.query(Subscription).filter(
+                Subscription.id == last_transaction.subscription_id
+            ).first()
+
+            if subscription:
+                subscription.used_lessons = max(
+                    0,
+                    subscription.used_lessons - 1,
+                )
+
+                db.add(LessonTransaction(
+                    subscription_id=subscription.id,
+                    booking_id=booking_id,
+                    amount=1,
+                    operation="refund",
+                    reason="Р’РѕР·РІСЂР°С‚ Р·Р°РЅСЏС‚РёСЏ РїРѕСЃР»Рµ РёР·РјРµРЅРµРЅРёСЏ РїРѕСЃРµС‰Р°РµРјРѕСЃС‚Рё",
+                ))
+
+    try:
+        db.commit()
+        db.refresh(attendance)
+        return attendance
+    except Exception:
+        db.rollback()
+        raise
+
+
+def get_attendance_history(db: Session, booking_id: int):
+    attendance = db.query(Attendance).filter(
+        Attendance.booking_id == booking_id
+    ).first()
+
+    if not attendance:
+        return []
+
+    return (
+        db.query(AttendanceHistory)
+        .filter(AttendanceHistory.attendance_id == attendance.id)
+        .order_by(AttendanceHistory.changed_at.asc())
+        .all()
+    )
+
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\services\backup_service.py ---
+
+
+import sqlite3
+from datetime import datetime
+from pathlib import Path
+
+
+def create_backup():
+    """
+    РЎРѕР·РґР°С‘С‚ СЂРµР·РµСЂРІРЅСѓСЋ РєРѕРїРёСЋ SQLite-Р±Р°Р·С‹ yasna.db.
+    РСЃС…РѕРґРЅР°СЏ Р±Р°Р·Р° РЅРµ РёР·РјРµРЅСЏРµС‚СЃСЏ.
+    """
+
+    project_root = Path.cwd()
+    database_path = project_root / "yasna.db"
+    backup_directory = project_root / "backups"
+
+    if not database_path.exists():
+        raise FileNotFoundError(
+            f"Р‘Р°Р·Р° РґР°РЅРЅС‹С… РЅРµ РЅР°Р№РґРµРЅР°: {database_path}"
+        )
+
+    backup_directory.mkdir(parents=True, exist_ok=True)
+
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    backup_path = backup_directory / f"yasna_backup_{timestamp}.db"
+
+    with sqlite3.connect(str(database_path)) as source:
+        with sqlite3.connect(str(backup_path)) as destination:
+            source.backup(destination)
+
+            result = destination.execute(
+                "PRAGMA integrity_check"
+            ).fetchone()
+
+            if not result or result[0] != "ok":
+                destination.close()
+                backup_path.unlink(missing_ok=True)
+                raise RuntimeError(
+                    "РџСЂРѕРІРµСЂРєР° СЂРµР·РµСЂРІРЅРѕР№ РєРѕРїРёРё РЅРµ РїСЂРѕР№РґРµРЅР°"
+                )
+
+    return backup_path
+
+
+def list_backups():
+    """Р’РѕР·РІСЂР°С‰Р°РµС‚ СЃРїРёСЃРѕРє СЂРµР·РµСЂРІРЅС‹С… РєРѕРїРёР№."""
+
+    backup_directory = Path.cwd() / "backups"
+
+    if not backup_directory.exists():
+        return []
+
+    return sorted(
+        backup_directory.glob("yasna_backup_*.db"),
+        reverse=True
+    )
+
+
+if __name__ == "__main__":
+    created_backup = create_backup()
+    print("Р РµР·РµСЂРІРЅР°СЏ РєРѕРїРёСЏ СѓСЃРїРµС€РЅРѕ СЃРѕР·РґР°РЅР°:")
+    print(created_backup)
+
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\services\booking_service.py ---
+
+
+from datetime import datetime, timezone
+
+from fastapi import HTTPException
+from sqlalchemy.orm import Session
+
+from ..models import Booking, Child, Lesson
+
+
+def create_booking(
+    db: Session,
+    family_id: int,
+    child_id: int,
+    lesson_id: int,
+):
+    # РџСЂРѕРІРµСЂСЏРµРј, РїСЂРёРЅР°РґР»РµР¶РёС‚ Р»Рё СЂРµР±С‘РЅРѕРє СЌС‚РѕР№ СЃРµРјСЊРµ.
+    child = db.query(Child).filter(
+        Child.id == child_id,
+        Child.family_id == family_id,
+    ).first()
+
+    if not child:
+        raise HTTPException(
+            status_code=404,
+            detail="Р РµР±С‘РЅРѕРє РЅРµ РЅР°Р№РґРµРЅ РІ РІР°С€РµР№ СЃРµРјСЊРµ",
+        )
+
+    # РџСЂРѕРІРµСЂСЏРµРј СЃСѓС‰РµСЃС‚РІРѕРІР°РЅРёРµ Рё Р°РєС‚РёРІРЅРѕСЃС‚СЊ Р·Р°РЅСЏС‚РёСЏ.
+    lesson = db.query(Lesson).filter(
+        Lesson.id == lesson_id,
+        Lesson.is_active.is_(True),
+    ).first()
+
+    if not lesson:
+        raise HTTPException(
+            status_code=404,
+            detail="Р—Р°РЅСЏС‚РёРµ РЅРµ РЅР°Р№РґРµРЅРѕ РёР»Рё РЅРµРґРѕСЃС‚СѓРїРЅРѕ",
+        )
+
+    # РџСЂРѕРІРµСЂСЏРµРј, С‡С‚Рѕ Р·Р°РЅСЏС‚РёРµ РµС‰С‘ РЅРµ РЅР°С‡Р°Р»РѕСЃСЊ.
+    starts_at = lesson.starts_at
+
+    if starts_at.tzinfo is None:
+        starts_at = starts_at.replace(tzinfo=timezone.utc)
+
+    if starts_at <= datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=400,
+            detail="РќРµР»СЊР·СЏ Р·Р°РїРёСЃР°С‚СЊСЃСЏ РЅР° СѓР¶Рµ РЅР°С‡Р°РІС€РµРµСЃСЏ Р·Р°РЅСЏС‚РёРµ",
+        )
+
+    # РџСЂРѕРІРµСЂСЏРµРј СЃСѓС‰РµСЃС‚РІСѓСЋС‰СѓСЋ Р·Р°РїРёСЃСЊ.
+    existing_booking = db.query(Booking).filter(
+        Booking.child_id == child_id,
+        Booking.lesson_id == lesson_id,
+    ).first()
+
+    if existing_booking:
+        if existing_booking.status == "booked":
+            raise HTTPException(
+                status_code=409,
+                detail="Р РµР±С‘РЅРѕРє СѓР¶Рµ Р·Р°РїРёСЃР°РЅ РЅР° СЌС‚Рѕ Р·Р°РЅСЏС‚РёРµ",
+            )
+
+        # РџРѕРІС‚РѕСЂРЅРѕ РёСЃРїРѕР»СЊР·СѓРµРј РѕС‚РјРµРЅС‘РЅРЅСѓСЋ Р·Р°РїРёСЃСЊ.
+        existing_booking.status = "booked"
+        existing_booking.created_at = datetime.utcnow()
+        booking = existing_booking
+
+    else:
+        booking = Booking(
+            child_id=child_id,
+            lesson_id=lesson_id,
+            status="booked",
+        )
+        db.add(booking)
+
+    # РџСЂРѕРІРµСЂСЏРµРј РІРјРµСЃС‚РёРјРѕСЃС‚СЊ Р·Р°РЅСЏС‚РёСЏ.
+    booked_count = db.query(Booking).filter(
+        Booking.lesson_id == lesson_id,
+        Booking.status == "booked",
+    ).count()
+
+    if booked_count > lesson.capacity:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="РЎРІРѕР±РѕРґРЅС‹С… РјРµСЃС‚ РЅР° Р·Р°РЅСЏС‚РёРё Р±РѕР»СЊС€Рµ РЅРµС‚",
+        )
+
+    try:
+        db.commit()
+        db.refresh(booking)
+        return booking
+    except Exception:
+        db.rollback()
+        raise
+
+
+def cancel_booking(
+    db: Session,
+    family_id: int,
+    booking_id: int,
+):
+    booking = (
+        db.query(Booking)
+        .join(Child, Booking.child_id == Child.id)
+        .filter(
+            Booking.id == booking_id,
+            Child.family_id == family_id,
+        )
+        .first()
+    )
+
+    if not booking:
+        raise HTTPException(
+            status_code=404,
+            detail="Р—Р°РїРёСЃСЊ РЅРµ РЅР°Р№РґРµРЅР°",
+        )
+
+    if booking.status == "cancelled":
+        raise HTTPException(
+            status_code=409,
+            detail="Р—Р°РїРёСЃСЊ СѓР¶Рµ РѕС‚РјРµРЅРµРЅР°",
+        )
+
+    lesson = db.query(Lesson).filter(
+        Lesson.id == booking.lesson_id
+    ).first()
+
+    if not lesson:
+        raise HTTPException(
+            status_code=404,
+            detail="Р—Р°РЅСЏС‚РёРµ РЅРµ РЅР°Р№РґРµРЅРѕ",
+        )
+
+    starts_at = lesson.starts_at
+
+    if starts_at.tzinfo is None:
+        starts_at = starts_at.replace(tzinfo=timezone.utc)
+
+    if starts_at <= datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=400,
+            detail="РќРµР»СЊР·СЏ РѕС‚РјРµРЅРёС‚СЊ Р·Р°РїРёСЃСЊ РїРѕСЃР»Рµ РЅР°С‡Р°Р»Р° Р·Р°РЅСЏС‚РёСЏ",
+        )
+
+    booking.status = "cancelled"
+
+    try:
+        db.commit()
+        db.refresh(booking)
+        return booking
+    except Exception:
+        db.rollback()
+        raise
+
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\services\export_service.py ---
+
+
+import csv
+import io
+
+from sqlalchemy.orm import Session
+
+from ..models import (
+    Family,
+    Child,
+    Lesson,
+    Booking,
+    Attendance,
+    Subscription,
+    Payment,
+)
+
+
+def create_csv(rows, headers):
+    """
+    РЎРѕР·РґР°С‘С‚ CSV РІ UTF-8 СЃ BOM,
+    С‡С‚РѕР±С‹ РєРёСЂРёР»Р»РёС†Р° РєРѕСЂСЂРµРєС‚РЅРѕ РѕС‚РєСЂС‹РІР°Р»Р°СЃСЊ РІ Excel.
+    """
+    output = io.StringIO()
+    writer = csv.writer(output, delimiter=";")
+
+    writer.writerow(headers)
+
+    for row in rows:
+        writer.writerow([
+            "" if value is None else str(value)
+            for value in row
+        ])
+
+    return output.getvalue().encode("utf-8-sig")
+
+
+def export_families(db: Session):
+    families = db.query(Family).order_by(Family.id).all()
+
+    rows = [
+        (
+            family.id,
+            family.name,
+            family.phone,
+            family.created_at,
+        )
+        for family in families
+    ]
+
+    return create_csv(
+        rows,
+        ["ID СЃРµРјСЊРё", "РќР°Р·РІР°РЅРёРµ СЃРµРјСЊРё", "РўРµР»РµС„РѕРЅ", "Р”Р°С‚Р° СЃРѕР·РґР°РЅРёСЏ"]
+    )
+
+
+def export_children(db: Session):
+    children = (
+        db.query(Child)
+        .order_by(Child.id)
+        .all()
+    )
+
+    rows = [
+        (
+            child.id,
+            child.family_id,
+            child.first_name,
+            child.last_name,
+            child.birth_date,
+            child.created_at,
+        )
+        for child in children
+    ]
+
+    return create_csv(
+        rows,
+        [
+            "ID СЂРµР±С‘РЅРєР°",
+            "ID СЃРµРјСЊРё",
+            "РРјСЏ",
+            "Р¤Р°РјРёР»РёСЏ",
+            "Р”Р°С‚Р° СЂРѕР¶РґРµРЅРёСЏ",
+            "Р”Р°С‚Р° РґРѕР±Р°РІР»РµРЅРёСЏ",
+        ]
+    )
+
+
+def export_lessons(db: Session):
+    lessons = db.query(Lesson).order_by(Lesson.starts_at).all()
+
+    rows = [
+        (
+            lesson.id,
+            lesson.title,
+            lesson.description,
+            lesson.starts_at,
+            lesson.duration_minutes,
+            lesson.capacity,
+            lesson.price,
+            lesson.is_active,
+        )
+        for lesson in lessons
+    ]
+
+    return create_csv(
+        rows,
+        [
+            "ID Р·Р°РЅСЏС‚РёСЏ",
+            "РќР°Р·РІР°РЅРёРµ",
+            "РћРїРёСЃР°РЅРёРµ",
+            "Р”Р°С‚Р° Рё РІСЂРµРјСЏ",
+            "Р”Р»РёС‚РµР»СЊРЅРѕСЃС‚СЊ (РјРёРЅ)",
+            "Р’РјРµСЃС‚РёРјРѕСЃС‚СЊ",
+            "РЎС‚РѕРёРјРѕСЃС‚СЊ",
+            "РђРєС‚РёРІРЅРѕ",
+        ]
+    )
+
+
+def export_bookings(db: Session):
+    bookings = (
+        db.query(Booking, Child, Lesson)
+        .join(Child, Booking.child_id == Child.id)
+        .join(Lesson, Booking.lesson_id == Lesson.id)
+        .order_by(Booking.created_at.desc())
+        .all()
+    )
+
+    rows = [
+        (
+            booking.id,
+            child.family_id,
+            child.id,
+            f"{child.first_name} {child.last_name or ''}".strip(),
+            lesson.id,
+            lesson.title,
+            lesson.starts_at,
+            booking.status,
+            booking.created_at,
+        )
+        for booking, child, lesson in bookings
+    ]
+
+    return create_csv(
+        rows,
+        [
+            "ID Р·Р°РїРёСЃРё",
+            "ID СЃРµРјСЊРё",
+            "ID СЂРµР±С‘РЅРєР°",
+            "РРјСЏ СЂРµР±С‘РЅРєР°",
+            "ID Р·Р°РЅСЏС‚РёСЏ",
+            "Р—Р°РЅСЏС‚РёРµ",
+            "Р”Р°С‚Р° Р·Р°РЅСЏС‚РёСЏ",
+            "РЎС‚Р°С‚СѓСЃ Р·Р°РїРёСЃРё",
+            "Р”Р°С‚Р° Р·Р°РїРёСЃРё",
+        ]
+    )
+
+
+def export_attendance(db: Session):
+    records = (
+        db.query(Attendance, Booking, Child, Lesson)
+        .join(Booking, Attendance.booking_id == Booking.id)
+        .join(Child, Booking.child_id == Child.id)
+        .join(Lesson, Booking.lesson_id == Lesson.id)
+        .order_by(Attendance.marked_at.desc())
+        .all()
+    )
+
+    rows = [
+        (
+            attendance.id,
+            booking.id,
+            child.family_id,
+            f"{child.first_name} {child.last_name or ''}".strip(),
+            lesson.title,
+            lesson.starts_at,
+            attendance.status,
+            attendance.marked_at,
+        )
+        for attendance, booking, child, lesson in records
+    ]
+
+    return create_csv(
+        rows,
+        [
+            "ID РїРѕСЃРµС‰РµРЅРёСЏ",
+            "ID Р·Р°РїРёСЃРё",
+            "ID СЃРµРјСЊРё",
+            "Р РµР±С‘РЅРѕРє",
+            "Р—Р°РЅСЏС‚РёРµ",
+            "Р”Р°С‚Р° Р·Р°РЅСЏС‚РёСЏ",
+            "РЎС‚Р°С‚СѓСЃ РїРѕСЃРµС‰РµРЅРёСЏ",
+            "Р”Р°С‚Р° РѕС‚РјРµС‚РєРё",
+        ]
+    )
+
+
+def export_subscriptions(db: Session):
+    subscriptions = (
+        db.query(Subscription)
+        .order_by(Subscription.id)
+        .all()
+    )
+
+    rows = [
+        (
+            subscription.id,
+            subscription.family_id,
+            subscription.child_id,
+            subscription.title,
+            subscription.total_lessons,
+            subscription.used_lessons,
+            subscription.total_lessons - subscription.used_lessons,
+            subscription.price,
+            subscription.expires_at,
+            subscription.is_active,
+        )
+        for subscription in subscriptions
+    ]
+
+    return create_csv(
+        rows,
+        [
+            "ID Р°Р±РѕРЅРµРјРµРЅС‚Р°",
+            "ID СЃРµРјСЊРё",
+            "ID СЂРµР±С‘РЅРєР°",
+            "РќР°Р·РІР°РЅРёРµ",
+            "Р’СЃРµРіРѕ Р·Р°РЅСЏС‚РёР№",
+            "РСЃРїРѕР»СЊР·РѕРІР°РЅРѕ",
+            "РћСЃС‚Р°Р»РѕСЃСЊ",
+            "РЎС‚РѕРёРјРѕСЃС‚СЊ",
+            "РЎСЂРѕРє РґРµР№СЃС‚РІРёСЏ",
+            "РђРєС‚РёРІРµРЅ",
+        ]
+    )
+
+
+def export_payments(db: Session):
+    payments = (
+        db.query(Payment)
+        .order_by(Payment.created_at.desc())
+        .all()
+    )
+
+    rows = [
+        (
+            payment.id,
+            payment.family_id,
+            payment.subscription_id,
+            payment.amount,
+            payment.status,
+            payment.payment_method,
+            payment.credited,
+            payment.created_at,
+        )
+        for payment in payments
+    ]
+
+    return create_csv(
+        rows,
+        [
+            "ID РїР»Р°С‚РµР¶Р°",
+            "ID СЃРµРјСЊРё",
+            "ID Р°Р±РѕРЅРµРјРµРЅС‚Р°",
+            "РЎСѓРјРјР°",
+            "РЎС‚Р°С‚СѓСЃ",
+            "РЎРїРѕСЃРѕР± РѕРїР»Р°С‚С‹",
+            "Р—Р°С‡РёСЃР»РµРЅ",
+            "Р”Р°С‚Р° СЃРѕР·РґР°РЅРёСЏ",
+        ]
+    )
+
+
+EXPORTS = {
+    "families": export_families,
+    "children": export_children,
+    "lessons": export_lessons,
+    "bookings": export_bookings,
+    "attendance": export_attendance,
+    "subscriptions": export_subscriptions,
+    "payments": export_payments,
+}
+
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\services\payment_service.py ---
+
+
+from decimal import Decimal
+
+from fastapi import HTTPException
+from sqlalchemy.orm import Session
+
+from ..models import (
+    Payment,
+    Subscription,
+    LessonTransaction,
+)
+
+
+def create_payment(
+    db: Session,
+    family_id: int,
+    subscription_id: int,
+    amount: Decimal,
+    payment_method: str = "demo",
+):
+    subscription = db.query(Subscription).filter(
+        Subscription.id == subscription_id,
+        Subscription.family_id == family_id,
+    ).first()
+
+    if not subscription:
+        raise HTTPException(
+            status_code=404,
+            detail="РђР±РѕРЅРµРјРµРЅС‚ РЅРµ РЅР°Р№РґРµРЅ РІ РІР°С€РµР№ СЃРµРјСЊРµ",
+        )
+
+    if subscription.is_active:
+        raise HTTPException(
+            status_code=409,
+            detail="РђР±РѕРЅРµРјРµРЅС‚ СѓР¶Рµ Р°РєС‚РёРІРёСЂРѕРІР°РЅ",
+        )
+
+    if payment_method != "demo":
+        raise HTTPException(
+            status_code=400,
+            detail="Р’ СЌС‚РѕР№ РІРµСЂСЃРёРё РґРѕСЃС‚СѓРїРЅР° С‚РѕР»СЊРєРѕ РґРµРјРѕРЅСЃС‚СЂР°С†РёРѕРЅРЅР°СЏ РѕРїР»Р°С‚Р°",
+        )
+
+    if amount != subscription.price:
+        raise HTTPException(
+            status_code=400,
+            detail="РЎСѓРјРјР° РїР»Р°С‚РµР¶Р° РЅРµ СЃРѕРІРїР°РґР°РµС‚ СЃРѕ СЃС‚РѕРёРјРѕСЃС‚СЊСЋ Р°Р±РѕРЅРµРјРµРЅС‚Р°",
+        )
+
+    payment = Payment(
+        family_id=family_id,
+        subscription_id=subscription_id,
+        amount=amount,
+        status="pending",
+        payment_method=payment_method,
+        credited=False,
+    )
+
+    try:
+        db.add(payment)
+        db.commit()
+        db.refresh(payment)
+        return payment
+    except Exception:
+        db.rollback()
+        raise
+
+
+def get_family_payments(db: Session, family_id: int):
+    return (
+        db.query(Payment)
+        .filter(Payment.family_id == family_id)
+        .order_by(Payment.created_at.desc())
+        .all()
+    )
+
+
+def get_all_payments(db: Session):
+    return (
+        db.query(Payment)
+        .order_by(Payment.created_at.desc())
+        .all()
+    )
+
+
+def update_payment_status(
+    db: Session,
+    payment_id: int,
+    new_status: str,
+):
+    if new_status not in {"succeeded", "failed", "cancelled"}:
+        raise HTTPException(
+            status_code=400,
+            detail="РќРµРґРѕРїСѓСЃС‚РёРјС‹Р№ СЃС‚Р°С‚СѓСЃ РїР»Р°С‚РµР¶Р°",
+        )
+
+    payment = db.query(Payment).filter(
+        Payment.id == payment_id
+    ).first()
+
+    if not payment:
+        raise HTTPException(
+            status_code=404,
+            detail="РџР»Р°С‚С‘Р¶ РЅРµ РЅР°Р№РґРµРЅ",
+        )
+
+    # РџРѕРІС‚РѕСЂРЅРѕРµ РїРѕРґС‚РІРµСЂР¶РґРµРЅРёРµ РЅРµ РЅР°С‡РёСЃР»СЏРµС‚ Р·Р°РЅСЏС‚РёСЏ РїРѕРІС‚РѕСЂРЅРѕ.
+    if payment.credited:
+        if new_status == "succeeded":
+            return payment
+
+        raise HTTPException(
+            status_code=409,
+            detail="РЈР¶Рµ РїРѕРґС‚РІРµСЂР¶РґС‘РЅРЅС‹Р№ РїР»Р°С‚С‘Р¶ РЅРµР»СЊР·СЏ РѕС‚РјРµРЅРёС‚СЊ СЌС‚РёРј СЃРїРѕСЃРѕР±РѕРј",
+        )
+
+    if payment.status != "pending":
+        raise HTTPException(
+            status_code=409,
+            detail="Р­С‚РѕС‚ РїР»Р°С‚С‘Р¶ СѓР¶Рµ РѕР±СЂР°Р±РѕС‚Р°РЅ",
+        )
+
+    if new_status == "succeeded":
+        subscription = None
+
+        if payment.subscription_id is not None:
+            subscription = db.query(Subscription).filter(
+                Subscription.id == payment.subscription_id,
+                Subscription.family_id == payment.family_id,
+            ).first()
+
+            if not subscription:
+                raise HTTPException(
+                    status_code=404,
+                    detail="РђР±РѕРЅРµРјРµРЅС‚ РїР»Р°С‚РµР¶Р° РЅРµ РЅР°Р№РґРµРЅ",
+                )
+
+            if subscription.is_active:
+                raise HTTPException(
+                    status_code=409,
+                    detail="РђР±РѕРЅРµРјРµРЅС‚ СѓР¶Рµ Р°РєС‚РёРІРёСЂРѕРІР°РЅ РґСЂСѓРіРёРј РїР»Р°С‚РµР¶РѕРј",
+                )
+
+            # РђРєС‚РёРІРёСЂСѓРµРј Р°Р±РѕРЅРµРјРµРЅС‚.
+            subscription.is_active = True
+
+            # РќР°С‡РёСЃР»СЏРµРј Р·Р°РЅСЏС‚РёСЏ С‚РѕР»СЊРєРѕ РѕРґРёРЅ СЂР°Р·.
+            db.add(LessonTransaction(
+                subscription_id=subscription.id,
+                booking_id=None,
+                amount=subscription.total_lessons,
+                operation="grant",
+                reason="РќР°С‡РёСЃР»РµРЅРёРµ РїРѕСЃР»Рµ РїРѕРґС‚РІРµСЂР¶РґРµРЅРёСЏ РѕРїР»Р°С‚С‹",
+            ))
+
+        payment.status = "succeeded"
+        payment.credited = True
+
+    else:
+        payment.status = new_status
+
+    try:
+        db.commit()
+        db.refresh(payment)
+        return payment
+    except Exception:
+        db.rollback()
+        raise
+
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\services\subscription_service.py ---
+
+
+from datetime import datetime
+
+from fastapi import HTTPException
+from sqlalchemy.orm import Session
+
+from ..models import (
+    Family,
+    Child,
+    Subscription,
+)
+
+
+def create_subscription(db: Session, payload):
+    family = db.query(Family).filter(
+        Family.id == payload.family_id
+    ).first()
+
+    if not family:
+        raise HTTPException(
+            status_code=404,
+            detail="РЎРµРјСЊСЏ РЅРµ РЅР°Р№РґРµРЅР°",
+        )
+
+    if payload.child_id is not None:
+        child = db.query(Child).filter(
+            Child.id == payload.child_id,
+            Child.family_id == payload.family_id,
+        ).first()
+
+        if not child:
+            raise HTTPException(
+                status_code=404,
+                detail="Р РµР±С‘РЅРѕРє РЅРµ РЅР°Р№РґРµРЅ РІ СѓРєР°Р·Р°РЅРЅРѕР№ СЃРµРјСЊРµ",
+            )
+
+    subscription = Subscription(
+        family_id=payload.family_id,
+        child_id=payload.child_id,
+        title=payload.title,
+        total_lessons=payload.total_lessons,
+        used_lessons=0,
+        price=payload.price,
+        expires_at=payload.expires_at,
+        is_active=False,
+    )
+
+    try:
+        db.add(subscription)
+        db.commit()
+        db.refresh(subscription)
+        return subscription
+
+    except Exception:
+        db.rollback()
+        raise
+
+
+def get_family_subscriptions(db: Session, family_id: int):
+    return (
+        db.query(Subscription)
+        .filter(Subscription.family_id == family_id)
+        .order_by(Subscription.created_at.desc())
+        .all()
+    )
+
+
+def get_all_subscriptions(db: Session):
+    return (
+        db.query(Subscription)
+        .order_by(Subscription.created_at.desc())
+        .all()
+    )
+
+
+def deactivate_subscription(db: Session, subscription_id: int):
+    subscription = db.query(Subscription).filter(
+        Subscription.id == subscription_id
+    ).first()
+
+    if not subscription:
+        raise HTTPException(
+            status_code=404,
+            detail="РђР±РѕРЅРµРјРµРЅС‚ РЅРµ РЅР°Р№РґРµРЅ",
+        )
+
+    subscription.is_active = False
+
+    try:
+        db.commit()
+        db.refresh(subscription)
+        return subscription
+
+    except Exception:
+        db.rollback()
+        raise
+
+
+def get_family_subscription_balance(db: Session, family_id: int):
+    now = datetime.utcnow()
+
+    subscriptions = (
+        db.query(Subscription)
+        .filter(
+            Subscription.family_id == family_id,
+            Subscription.is_active.is_(True),
+        )
+        .all()
+    )
+
+    total_lessons = 0
+    used_lessons = 0
+    remaining_lessons = 0
+
+    for subscription in subscriptions:
+        if (
+            subscription.expires_at is not None
+            and subscription.expires_at.replace(tzinfo=None) <= now
+        ):
+            continue
+
+        total_lessons += subscription.total_lessons
+        used_lessons += subscription.used_lessons
+
+        remaining_lessons += max(
+            0,
+            subscription.total_lessons - subscription.used_lessons,
+        )
+
+    return {
+        "total_lessons": total_lessons,
+        "used_lessons": used_lessons,
+        "remaining_lessons": remaining_lessons,
+        "money_balance": 0,
+    }
+
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\services\__init__.py ---
+
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\services\__pycache__\attendance_service.cpython-313.pyc ---
+
+у
+    .Lшj­.  г            
+       уИ   • S SK J r   S SKJr  S SKJr  SSKJrJrJrJ	r	J
+r
+Jr  1 Skr SS\S	\S
+\S\S-  4S jjrS\S	\4S jr1 Skr SS\S	\S
+\S\S-  4S jjrS\S	\4S jrg)й    )Ъdatetime)ЪHTTPException)ЪSessionй   )ЪBookingЪChildЪ
+AttendanceЪAttendanceHistoryЪSubscriptionЪLessonTransaction>   ЪmissedЪattendedЪ	cancelledNЪdbЪ
+booking_idЪ
+new_statusЪcommentc           
+      ут
+  • U[         ;  a
+  [        SSS9eU R                  [        5      R	                  [        R
+                  U:H  5      R                  5       nU(       d
+  [        SSS9eUR                  S:w  a
+  [        SSS9eU R                  [        5      R	                  [        R                  U:H  5      R                  5       nU(       a  UR                  OS nUc@  [        UU[        R                  " 5       S9nU R                  U5        U R                  5         ObXb:X  a  U$ [        UR
+                  UU[        R                  " 5       US	9nU R                  U5        X%l        [        R                  " 5       Ul        U R                  [         5      R	                  [         R                  U:H  5      R#                  [         R$                  R'                  5       [         R
+                  R'                  5       5      R                  5       nUS
+:X  Gao  U(       a  UR(                  S:X  a  GOU(       aЎ  UR(                  S:X  a‘  U R                  [*        5      R	                  [*        R
+                  UR,                  :H  5      R                  5       n	U	(       a;  U	=R.                  S-  sl        U R                  [!        U	R
+                  USSSS95        GOcU R                  [0        5      R	                  [0        R
+                  UR2                  :H  5      R                  5       n
+U R                  [*        5      R	                  [*        R4                  U
+R4                  :H  [*        R6                  R9                  S5      [*        R.                  [*        R:                  :  [*        R2                  U
+R
+                  :H  [*        R2                  R9                  S 5      -  5      R#                  [*        R2                  R9                  S 5      R=                  5       [*        R$                  R'                  5       5      R                  5       n	U	(       a;  U	=R.                  S-  sl        U R                  [!        U	R
+                  USSSS95        OµUS
+:X  aЇ  U(       aЁ  UR(                  S:X  a  U R                  [*        5      R	                  [*        R
+                  UR,                  :H  5      R                  5       n	U	(       aD  [?        SU	R.                  S-
+  5      U	l        U R                  [!        U	R
+                  USSSS95         U RA                  5         U RC                  U5        U$ ! [D         a    U RG                  5         e f = f©Niђ  u>   РќРµРґРѕРїСѓСЃС‚РёРјС‹Р№ СЃС‚Р°С‚СѓСЃ РїРѕСЃРµС‰Р°РµРјРѕСЃС‚Рё)Ъstatus_codeЪdetaili”  u    Р—Р°РїРёСЃСЊ РЅРµ РЅР°Р№РґРµРЅР°ЪbookeduX   РќРµР»СЊР·СЏ РѕС‚РјРµС‚РёС‚СЊ РїРѕСЃРµС‰Р°РµРјРѕСЃС‚СЊ РѕС‚РјРµРЅС‘РЅРЅРѕР№ Р·Р°РїРёСЃРё)r   ЪstatusЪ	marked_at)Ъattendance_idЪ
+old_statusr   Ъ
+changed_atr   r   ЪuseЪrefundй   u@   РџРѕРІС‚РѕСЂРЅРѕРµ РїРѕРґС‚РІРµСЂР¶РґРµРЅРёРµ РїРѕСЃРµС‰РµРЅРёСЏ)Ъsubscription_idr   ЪamountЪ	operationЪreasonTu!   РџРѕСЃРµС‰РµРЅРёРµ Р·Р°РЅСЏС‚РёСЏr   uT   Р’РѕР·РІСЂР°С‚ Р·Р°РЅСЏС‚РёСЏ РїРѕСЃР»Рµ РёР·РјРµРЅРµРЅРёСЏ РїРѕСЃРµС‰Р°РµРјРѕСЃС‚Рё©$ЪVALID_STATUSESr   Ъqueryr   ЪfilterЪidЪfirstr   r	   r   r   ЪutcnowЪaddЪflushr
+   r   r   Ъorder_byЪ
+created_atЪdescr#   r   r!   Ъused_lessonsr   Ъchild_idЪ	family_idЪ	is_activeЪis_Ъtotal_lessonsЪascЪmaxЪcommitЪrefreshЪ	ExceptionЪrollback©r   r   r   r   ЪbookingЪ
+attendancer   ЪhistoryЪlast_transactionЪsubscriptionЪchilds              фJ   C:\Users\РјР°РєСЃ\Desktop\yasna\backend\app\services\attendance_service.pyЪmark_attendancerE      уl  Ђ р њУ'ЬШШSс
+р 	
+р
+ Џh‰h”wУЧ&С&ЬЏ
+‰
+ђjС узЃeѓgр ц ЬШШ5с
+р 	
+р
+ ‡~Ѓ~У!ЬШШmс
+р 	
+р
+ —‘њ*У%Ч,С,ЬЧС С+узЃeѓgр ц '1ђЧ"Т"°dЂJаСЬШ!ШЬ—o’oУ'с
+€
+р
+ 	Џ‰€zФШ
+Џ‰Ќ
+аУ#ШРд#Ш$џ-™-Ш!Ш!Ь—’У(Шс
+€р 	Џ‰€wЊа&ФЬ'џљУ0€
+Фр 	Џ‰Ф"У#Я	‰Ф!Ч,С,°
+С:У	;Я	‰ЬЧ(С(Ч-С-У/ЬЧ С Ч%С%У'у
+
+ч 
+‰‹р р ђZФЮР 0Ч :С :ёeУ CЩжР"2Ч"<С"<АУ"Hаџ8™8¤LУ1Ч8С8Ь—‘Р#3Ч#CС#CСCуз‰e‹gр ц ШЧ)Т)ЁQС.Х)а—‘Ф(Ш$0§OЎOШ)ШШ#Ш]сф щр —H‘HњU“OЧ*С*Ь—‘GЧ,С,С,уз‰e‹gр р
+ —‘њУ&Я‘Ь Ч*С*ЁeЇo©oС=Ь Ч*С*Ч.С.ЁtУ4Ь Ч-С-ґЧ0JС0JСJд%Ч.С.°%·(±(С:Ь'Ч0С0Ч4С4°TУ:с<уч ‘Ь Ч)С)Ч-С-ЁdУ3Ч7С7У9Ь Ч+С+Ч0С0У2уч ‘“р ц$ ШЧ)Т)ЁQС.Х)а—‘Ф(Ш$0§OЎOШ)ШШ#Ш>сф шр 
+ђzУ	!ЮР 0Ч :С :ёeУ CШџ8™8¤LУ1Ч8С8Ь—‘Р#3Ч#CС#CСCуз‰e‹gр ц Ь,/ШШ Ч-С-°С1у-ђФ)р
+ —‘Ф(Ш$0§OЎOШ)ШШ&Шqсф рШ
+Џ	‰	ЊШ
+Џ
+‰
+ђ:ФШРшЬу Ш
+Џ‰ЊШръу   Ф7"U ХU6c                 уЉ  • U R                  [        5      R                  [        R                  U:H  5      R	                  5       nU(       d  / $ U R                  [
+        5      R                  [
+        R                  UR                  :H  5      R                  [
+        R                  R                  5       5      R                  5       $ ©N©r'   r	   r(   r   r*   r
+   r   r)   r.   r   r7   Ъall©r   r   r?   s      rD   Ъget_attendance_historyrM   ±   уЊ   Ђ Ш—‘њ*У%Ч,С,ЬЧС С+узЃeѓgр ц Ш€	р 	Џ‰Ф"У#Я	‰Ф!Ч/С/°:·=±=С@У	AЯ	‰Ф#Ч.С.Ч2С2У4У	5Я	‰‹р	у    c           
+      ут
+  • U[         ;  a
+  [        SSS9eU R                  [        5      R	                  [        R
+                  U:H  5      R                  5       nU(       d
+  [        SSS9eUR                  S:w  a
+  [        SSS9eU R                  [        5      R	                  [        R                  U:H  5      R                  5       nU(       a  UR                  OS nUc@  [        UU[        R                  " 5       S9nU R                  U5        U R                  5         ObXb:X  a  U$ [        UR
+                  UU[        R                  " 5       US	9nU R                  U5        X%l        [        R                  " 5       Ul        U R                  [         5      R	                  [         R                  U:H  5      R#                  [         R$                  R'                  5       [         R
+                  R'                  5       5      R                  5       nUS
+:X  Gao  U(       a  UR(                  S:X  a  GOU(       aЎ  UR(                  S:X  a‘  U R                  [*        5      R	                  [*        R
+                  UR,                  :H  5      R                  5       n	U	(       a;  U	=R.                  S-  sl        U R                  [!        U	R
+                  USSSS95        GOcU R                  [0        5      R	                  [0        R
+                  UR2                  :H  5      R                  5       n
+U R                  [*        5      R	                  [*        R4                  U
+R4                  :H  [*        R6                  R9                  S5      [*        R.                  [*        R:                  :  [*        R2                  U
+R
+                  :H  [*        R2                  R9                  S 5      -  5      R#                  [*        R2                  R9                  S 5      R=                  5       [*        R$                  R'                  5       5      R                  5       n	U	(       a;  U	=R.                  S-  sl        U R                  [!        U	R
+                  USSSS95        OµUS
+:X  aЇ  U(       aЁ  UR(                  S:X  a  U R                  [*        5      R	                  [*        R
+                  UR,                  :H  5      R                  5       n	U	(       aD  [?        SU	R.                  S-
+  5      U	l        U R                  [!        U	R
+                  USSSS95         U RA                  5         U RC                  U5        U$ ! [D         a    U RG                  5         e f = fr   r%   r=   s              rD   rE   rE   Д   rF   rG   c                 уЉ  • U R                  [        5      R                  [        R                  U:H  5      R	                  5       nU(       d  / $ U R                  [
+        5      R                  [
+        R                  UR                  :H  5      R                  [
+        R                  R                  5       5      R                  5       $ rI   rJ   rL   s      rD   rM   rM   a  rN   rO   rI   )r   Ъfastapir   Ъsqlalchemy.ormr   Ъmodelsr   r   r	   r
+   r   r   r&   ЪintЪstrrE   rM   © rO   rD   Ъ<module>rX      sј   ре е !Э "чч т 5Ђр с	ZШрZарZр рZр ђ4‰Zх	Zрzwр °Cф т  5Ђр с	ZШрZарZр рZр ђ4‰Zх	Zрzwр °Cх rO   
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\services\__pycache__\backup_service.cpython-313.pyc ---
+
+у
+    КZшj  г                   уl   • S SK r S SKJr  S SKJr  S rS r\S:X  a  \" 5       r\" S5        \" \5        gg)й    N)Ъdatetime)ЪPathc                  уА  • [         R                  " 5       n U S-  nU S-  nUR                  5       (       d  [        SU 35      eUR	                  SSS9  [
+        R                  " 5       R                  S5      nUSU S3-  n[        R                  " [        U5      5       n[        R                  " [        U5      5       nUR                  U5        UR                  S	5      R                  5       nU(       a	  US
+   S:w  a*  UR                  5         UR                  SS9  [!        S5      e SSS5        SSS5        U$ ! , (       d  f       N= f! , (       d  f       U$ = f)u}   
+РЎРѕР·РґР°С‘С‚ СЂРµР·РµСЂРІРЅСѓСЋ РєРѕРїРёСЋ SQLite-Р±Р°Р·С‹ yasna.db.
+РСЃС…РѕРґРЅР°СЏ Р±Р°Р·Р° РЅРµ РёР·РјРµРЅСЏРµС‚СЃСЏ.
+zyasna.dbЪbackupsu+   Р‘Р°Р·Р° РґР°РЅРЅС‹С… РЅРµ РЅР°Р№РґРµРЅР°: T)ЪparentsЪexist_okz%Y-%m-%d_%H-%M-%SЪyasna_backup_z.dbzPRAGMA integrity_checkr   Ъok)Ъ
+missing_okuD   РџСЂРѕРІРµСЂРєР° СЂРµР·РµСЂРІРЅРѕР№ РєРѕРїРёРё РЅРµ РїСЂРѕР№РґРµРЅР°N)r   ЪcwdЪexistsЪFileNotFoundErrorЪmkdirr   ЪnowЪstrftimeЪsqlite3ЪconnectЪstrЪbackupЪexecuteЪfetchoneЪcloseЪunlinkЪRuntimeError)Ъproject_rootЪdatabase_pathЪbackup_directoryЪ	timestampЪbackup_pathЪsourceЪdestinationЪresults           Ъ@C:\Users\pc\Desktop\yasna\backend\app\services\backup_service.pyЪcreate_backupr$      sF  Ђ ф —8’8“:ЂLШ  :С-ЂMШ# iС/РаЧСЧ!С!ЬШ9ё-ёРIу
+р 	
+р ЧС 4°$РС7д—’“Ч'С'Р(;У<ЂIШ" }°Y°KёsР%CСCЂKд	ЏЉњ]У+Ф	,°ЬЏ_Љ_њS У-Ф.°+ШЏM‰M+Ф&а Ч(С(Ш(уз‰h‹jр ц V A™YЁ$У.ШЧ!С!Ф#ШЧ"С"ЁdР"С3Ь"ШZур р /ч /ч 
+-р Рч /Х.ъч 
+-Ф	,р Ръs%   В EВ?A+D=Д+EД=
+E	ЕEЕ
+Ec                  у’   • [         R                  " 5       S-  n U R                  5       (       d  / $ [        U R	                  S5      SS9$ )u@   Р’РѕР·РІСЂР°С‰Р°РµС‚ СЃРїРёСЃРѕРє СЂРµР·РµСЂРІРЅС‹С… РєРѕРїРёР№.r   zyasna_backup_*.dbT)Ъreverse)r   r   r   ЪsortedЪglob)r   s    r#   Ъlist_backupsr)   -   sH   Ђ ф —x’x“z IС-РаЧ"С"Ч$С$Ш€	дШЧСР1У2Шср у    Ъ__main__u<   Р РµР·РµСЂРІРЅР°СЏ РєРѕРїРёСЏ СѓСЃРїРµС€РЅРѕ СЃРѕР·РґР°РЅР°:)	r   r   Ъpathlibr   r$   r)   Ъ__name__Ъcreated_backupЪprint© r*   r#   Ъ<module>r1      s@   рг Э Э т#тLр €zУЩ"“_ЂNЩ	Р
+HФIЩ	€.Хр r*   
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\services\__pycache__\booking_service.cpython-313.pyc ---
+
+у
+    ЬOшj  г                   уp   • S SK J r Jr  S SKJr  S SKJr  SSKJrJrJ	r	  S\S\
+S\
+S	\
+4S
+ jrS\S\
+S\
+4S jrg)й    )ЪdatetimeЪtimezone)ЪHTTPException)ЪSessionй   )ЪBookingЪChildЪLessonЪdbЪ	family_idЪchild_idЪ	lesson_idc                 уp  • U R                  [        5      R                  [        R                  U:H  [        R                  U:H  5      R                  5       nU(       d
+  [        SSS9eU R                  [        5      R                  [        R                  U:H  [        R                  R                  S5      5      R                  5       nU(       d
+  [        SSS9eUR                  nUR                  c  UR                  [        R                  S9nU[        R                   " [        R                  5      ::  a
+  [        SSS9eU R                  ["        5      R                  ["        R$                  U:H  ["        R&                  U:H  5      R                  5       nU(       a>  UR(                  S	:X  a
+  [        S
+SS9eS	Ul        [        R*                  " 5       Ul        UnO[#        UUS	S9nU R/                  U5        U R                  ["        5      R                  ["        R&                  U:H  ["        R(                  S	:H  5      R1                  5       n	X•R2                  :”  a  U R5                  5         [        S
+SS9e U R7                  5         U R9                  U5        U$ ! [:         a    U R5                  5         e f = f)Nй”  u9   Р РµР±С‘РЅРѕРє РЅРµ РЅР°Р№РґРµРЅ РІ РІР°С€РµР№ СЃРµРјСЊРµ©Ъstatus_codeЪdetailTu>   Р—Р°РЅСЏС‚РёРµ РЅРµ РЅР°Р№РґРµРЅРѕ РёР»Рё РЅРµРґРѕСЃС‚СѓРїРЅРѕ©Ъtzinfoйђ  uQ   РќРµР»СЊР·СЏ Р·Р°РїРёСЃР°С‚СЊСЃСЏ РЅР° СѓР¶Рµ РЅР°С‡Р°РІС€РµРµСЃСЏ Р·Р°РЅСЏС‚РёРµЪbookedй™  u?   Р РµР±С‘РЅРѕРє СѓР¶Рµ Р·Р°РїРёСЃР°РЅ РЅР° СЌС‚Рѕ Р·Р°РЅСЏС‚РёРµ)r   r   ЪstatusuC   РЎРІРѕР±РѕРґРЅС‹С… РјРµСЃС‚ РЅР° Р·Р°РЅСЏС‚РёРё Р±РѕР»СЊС€Рµ РЅРµС‚)Ъqueryr	   ЪfilterЪidr   Ъfirstr   r
+   Ъ	is_activeЪis_Ъ	starts_atr   Ъreplacer   Ъutcr   Ъnowr   r   r   r   ЪutcnowЪ
+created_atЪaddЪcountЪcapacityЪrollbackЪcommitЪrefreshЪ	Exception)
+r   r   r   r   ЪchildЪlessonr    Ъexisting_bookingЪbookingЪbooked_counts
+             фG   C:\Users\РјР°РєСЃ\Desktop\yasna\backend\app\services\booking_service.pyЪcreate_bookingr3   
+   s]  Ђ р ЏH‰H”U‹OЧ"С"ЬЏ‰ђHСЬЏ‰9С$уч Ѓeѓgр 
+ц
+ ЬШШNс
+р 	
+р ЏX‰X”fУЧ$С$ЬЏ	‰	ђYСЬЧСЧСTУ"уч Ѓeѓgр ц
+ ЬШШSс
+р 	
+р Ч С ЂIаЧССШЧ%С%¬XЇ\©\Р%Р:€	а”H—L’L¤§ЎУ.У.ЬШШfс
+р 	
+р —x‘x¤У(Ч/С/ЬЧСHС$ЬЧСYС&уч Ѓeѓgр ц
+ ШЧ"С" hУ.ЬШШXср р #+РФЬ&.§oўoУ&7РФ#Ш"‰ф ШШШс
+€р
+ 	Џ‰€wЊр —8‘8њGУ$Ч+С+ЬЧСYС&ЬЏ‰(С"уч Ѓeѓgр р
+ —o‘oУ%Ш
+Џ‰ЊЬШШXс
+р 	
+р
+Ш
+Џ	‰	ЊШ
+Џ
+‰
+ђ7ФШ€шЬу Ш
+Џ‰ЊШръs   Й6"J КJ5Ъ
+booking_idc                 у€  • U R                  [        5      R                  [        [        R                  [        R
+                  :H  5      R                  [        R
+                  U:H  [        R                  U:H  5      R                  5       nU(       d
+  [        SSS9eUR                  S:X  a
+  [        SSS9eU R                  [        5      R                  [        R
+                  UR                  :H  5      R                  5       nU(       d
+  [        SSS9eUR                  nUR                  c  UR                  [         R"                  S9nU[$        R&                  " [         R"                  5      ::  a
+  [        S	S
+S9eSUl
+         U R)                  5         U R+                  U5        U$ ! [,         a    U R/                  5         e f = f)Nr   u    Р—Р°РїРёСЃСЊ РЅРµ РЅР°Р№РґРµРЅР°r   Ъ	cancelledr   u$   Р—Р°РїРёСЃСЊ СѓР¶Рµ РѕС‚РјРµРЅРµРЅР°u"   Р—Р°РЅСЏС‚РёРµ РЅРµ РЅР°Р№РґРµРЅРѕr   r   uQ   РќРµР»СЊР·СЏ РѕС‚РјРµРЅРёС‚СЊ Р·Р°РїРёСЃСЊ РїРѕСЃР»Рµ РЅР°С‡Р°Р»Р° Р·Р°РЅСЏС‚РёСЏ)r   r   Ъjoinr	   r   r   r   r   r   r   r   r
+   r   r    r   r!   r   r"   r   r#   r*   r+   r,   r)   )r   r   r4   r0   r.   r    s         r2   Ъcancel_bookingr8   d   s~  Ђ р 	Џ‰”УЯ	‰Њe”WЧ%С%¬Ї©С1У	2Я	‰ЬЏJ‰J*С$ЬЏO‰OyС(у
+
+ч 
+‰‹р ц ЬШШ5с
+р 	
+р
+ ‡~Ѓ~У$ЬШШ9с
+р 	
+р
+ ЏX‰X”fУЧ$С$ЬЏ	‰	ђWЧ&С&С&узЃeѓgр ц ЬШШ7с
+р 	
+р
+ Ч С ЂIаЧССШЧ%С%¬XЇ\©\Р%Р:€	а”H—L’L¤§ЎУ.У.ЬШШfс
+р 	
+р
+ !ЂG„NрШ
+Џ	‰	ЊШ
+Џ
+‰
+ђ7ФШ€шЬу Ш
+Џ‰ЊШръs   Ж"F% Ж%GN)r   r   Ъfastapir   Ъsqlalchemy.ormr   Ъmodelsr   r	   r
+   Ъintr3   r8   © у    r2   Ъ<module>r?      sb   рз 'е !Э "з +С +рWШрWарWр рWр ф	Wрt8Шр8ар8р х8r>   
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\services\__pycache__\export_service.cpython-313.pyc ---
+
+у
+    $XшjШ  г                   уА   • S SK r S SKrS SKJr  SSKJrJrJrJrJ	r	J
+r
+Jr  S rS\4S jrS\4S jrS\4S	 jrS\4S
+ jrS\4S jrS\4S jrS\4S jr\\\\\\\S.rg)й    N)ЪSessionй   )ЪFamilyЪChildЪLessonЪBookingЪ
+AttendanceЪSubscriptionЪPaymentc           	      у2  • [         R                  " 5       n[        R                  " USS9nUR	                  U5        U  H3  nUR	                  U Vs/ s H  nUc  SO
+[        U5      PM     sn5        M5     UR                  5       R                  S5      $ s  snf )uw   
+РЎРѕР·РґР°С‘С‚ CSV РІ UTF-8 СЃ BOM,
+С‡С‚РѕР±С‹ РєРёСЂРёР»Р»РёС†Р° РєРѕСЂСЂРµРєС‚РЅРѕ РѕС‚РєСЂС‹РІР°Р»Р°СЃСЊ РІ Excel.
+Ъ;)Ъ	delimiterЪ z	utf-8-sig)ЪioЪStringIOЪcsvЪwriterЪwriterowЪstrЪgetvalueЪencode)ЪrowsЪheadersЪoutputr   ЪrowЪvalues         фF   C:\Users\РјР°РєСЃ\Desktop\yasna\backend\app\services\export_service.pyЪ
+create_csvr      s€   Ђ ф
+ Џ[Љ[‹]ЂFЬЏZЉZЁ#С.ЂFа
+‡OЃOђGФг€ШЏ‰бу
+вђр ‘-‰B¤SЁЈZТ/Щс
+ц 	с р Џ?‰?УЧ#С# KУ0Р0щт
+s   БB
+Ъdbc                 у$  • U R                  [        5      R                  [        R                  5      R	                  5       nU Vs/ s H1  nUR                  UR
+                  UR                  UR                  4PM3     nn[        U/ SQ5      $ s  snf )N)х   ID СЃРµРјСЊРёu   РќР°Р·РІР°РЅРёРµ СЃРµРјСЊРёu   РўРµР»РµС„РѕРЅх   Р”Р°С‚Р° СЃРѕР·РґР°РЅРёСЏ)	Ъqueryr   Ъorder_byЪidЪallЪnameЪphoneЪ
+created_atr   )r   ЪfamiliesЪfamilyr   s       r   Ъexport_familiesr,   %   s€   Ђ ШЏx‰xњУЧ(С(¬Ї©У3Ч7С7У9ЂHс ут €Fр ЏI‰IШЏK‰KШЏL‰LШЧСу		
+с р 	р ф ШЪgур щтs   Б8Bc           	      уP  • U R                  [        5      R                  [        R                  5      R	                  5       nU Vs/ s HG  nUR                  UR
+                  UR                  UR                  UR                  UR                  4PMI     nn[        U/ SQ5      $ s  snf )N)х   ID СЂРµР±С‘РЅРєР°r!   u   РРјСЏu   Р¤Р°РјРёР»РёСЏu   Р”Р°С‚Р° СЂРѕР¶РґРµРЅРёСЏu   Р”Р°С‚Р° РґРѕР±Р°РІР»РµРЅРёСЏ)r#   r   r$   r%   r&   Ъ	family_idЪ
+first_nameЪ	last_nameЪ
+birth_dater)   r   )r   ЪchildrenЪchildr   s       r   Ъexport_childrenr5   8   s›   Ђ а
+Џ‰”‹Я	‰”%—(‘(У	Я	‰‹р с у
+т €Eр ЏH‰HШЏO‰OШЧСШЏO‰OШЧСШЧСу	
+с р 	р 
+ф Шт	
+у
+р 
+щт
+s   БAB#c                 у|  • U R                  [        5      R                  [        R                  5      R	                  5       nU Vs/ s H]  nUR
+                  UR                  UR                  UR                  UR                  UR                  UR                  UR                  4PM_     nn[        U/ SQ5      $ s  snf )N)х   ID Р·Р°РЅСЏС‚РёСЏх   РќР°Р·РІР°РЅРёРµu   РћРїРёСЃР°РЅРёРµu   Р”Р°С‚Р° Рё РІСЂРµРјСЏu!   Р”Р»РёС‚РµР»СЊРЅРѕСЃС‚СЊ (РјРёРЅ)u   Р’РјРµСЃС‚РёРјРѕСЃС‚СЊх   РЎС‚РѕРёРјРѕСЃС‚СЊu   РђРєС‚РёРІРЅРѕ)r#   r   r$   Ъ	starts_atr&   r%   ЪtitleЪdescriptionЪduration_minutesЪcapacityЪpriceЪ	is_activer   )r   ЪlessonsЪlessonr   s       r   Ъexport_lessonsrC   X   s®   Ђ ШЏh‰h”vУЧ'С'¬Ч(8С(8У9Ч=С=У?ЂGс ут €Fр ЏI‰IШЏL‰LШЧСШЧСШЧ#С#ШЏO‰OШЏL‰LШЧСу		
+с р 	р ф Шт		
+ур щтs   БA$B9c                 ум  • U R                  [        [        [        5      R	                  [        [        R
+                  [        R                  :H  5      R	                  [        [        R                  [        R                  :H  5      R                  [        R                  R                  5       5      R                  5       nU VVVs/ s H‘  u  p#nUR                  UR                  UR                  UR                   SUR                  =(       d    S 3R                  5       UR                  UR                   UR"                  UR$                  UR                  4	PM“     nnnn['        U/ SQ5      $ s  snnnf )NЪ r   )	х   ID Р·Р°РїРёСЃРёr!   r.   u   РРјСЏ СЂРµР±С‘РЅРєР°r7   х   Р—Р°РЅСЏС‚РёРµх   Р”Р°С‚Р° Р·Р°РЅСЏС‚РёСЏu   РЎС‚Р°С‚СѓСЃ Р·Р°РїРёСЃРёu   Р”Р°С‚Р° Р·Р°РїРёСЃРё)r#   r   r   r   ЪjoinЪchild_idr%   Ъ	lesson_idr$   r)   Ъdescr&   r/   r0   r1   Ъstripr;   r:   Ъstatusr   )r   ЪbookingsЪbookingr4   rB   r   s         r   Ъexport_bookingsrQ   x   s  Ђ а
+Џ‰”њ%¤У(Я	‰Њe”WЧ%С%¬Ї©С1У	2Я	‰Њf”gЧ'С'¬6Ї9©9С4У	5Я	‰”'Ч$С$Ч)С)У+У	,Я	‰‹р с( '/хт '/С"€GFр ЏJ‰JШЏO‰OШЏH‰HШЧСР   %§/Ў/Ч"7°RР!8Р9Ч?С?УAШЏI‰IШЏL‰LШЧСШЏN‰NШЧСу
+	
+с '/р 	т ф Шт
+	
+ур щфs   ГBE/c                 уL  • U R                  [        [        [        [        5      R                  [        [        R                  [        R                  :H  5      R                  [        [        R                  [        R                  :H  5      R                  [        [        R                  [        R                  :H  5      R                  [        R                  R                  5       5      R                  5       nU VVVVs/ s H†  u  p#pEUR                  UR                  UR                  UR                   SUR                   =(       d    S 3R#                  5       UR$                  UR&                  UR(                  UR                  4PM€     nnnnn[+        U/ SQ5      $ s  snnnnf )NrE   r   )u   ID РїРѕСЃРµС‰РµРЅРёСЏrF   r!   u   Р РµР±С‘РЅРѕРєrG   rH   u   РЎС‚Р°С‚СѓСЃ РїРѕСЃРµС‰РµРЅРёСЏu   Р”Р°С‚Р° РѕС‚РјРµС‚РєРё)r#   r	   r   r   r   rI   Ъ
+booking_idr%   rJ   rK   r$   Ъ	marked_atrL   r&   r/   r0   r1   rM   r;   r:   rN   r   )r   ЪrecordsЪ
+attendancerP   r4   rB   r   s          r   Ъexport_attendancerW       s2  Ђ а
+Џ‰”њW¤e¬VУ4Я	‰Њg”zЧ,С,ґ·
+±
+С:У	;Я	‰Њe”WЧ%С%¬Ї©С1У	2Я	‰Њf”gЧ'С'¬6Ї9©9С4У	5Я	‰”*Ч&С&Ч+С+У-У	.Я	‰‹р с( 3:цт 3:С.€J р ЏM‰MШЏJ‰JШЏO‰OШЧСР   %§/Ў/Ч"7°RР!8Р9Ч?С?УAШЏL‰LШЧСШЧСШЧ С у		
+с 3:р 	у ф Шт		
+ур щхs   Г>BF
+c                 уВ  • U R                  [        5      R                  [        R                  5      R	                  5       nU Vs/ s HЂ  nUR                  UR
+                  UR                  UR                  UR                  UR                  UR                  UR                  -
+  UR                  UR                  UR                  4
+PM‚     nn[        U/ SQ5      $ s  snf )N)
+х   ID Р°Р±РѕРЅРµРјРµРЅС‚Р°r!   r.   r8   u   Р’СЃРµРіРѕ Р·Р°РЅСЏС‚РёР№u   РСЃРїРѕР»СЊР·РѕРІР°РЅРѕu   РћСЃС‚Р°Р»РѕСЃСЊr9   u   РЎСЂРѕРє РґРµР№СЃС‚РІРёСЏu   РђРєС‚РёРІРµРЅ)r#   r
+   r$   r%   r&   r/   rJ   r;   Ъtotal_lessonsЪused_lessonsr?   Ъ
+expires_atr@   r   )r   ЪsubscriptionsЪsubscriptionr   s       r   Ъexport_subscriptionsr_   З   sП   Ђ а
+Џ‰”УЯ	‰”,—/‘/У	"Я	‰‹р с& *ут *€Lр ЏO‰OШЧ"С"ШЧ!С!ШЧСШЧ&С&ШЧ%С%ШЧ&С&ЁЧ)BС)BСBШЧСШЧ#С#ШЧ"С"у	
+с *р 	р ф  Шт	
+ур щт!s   БBCc                 у  • U R                  [        5      R                  [        R                  R	                  5       5      R                  5       nU Vs/ s H]  nUR                  UR                  UR                  UR                  UR                  UR                  UR                  UR                  4PM_     nn[        U/ SQ5      $ s  snf )N)u   ID РїР»Р°С‚РµР¶Р°r!   rY   u
+   РЎСѓРјРјР°u   РЎС‚Р°С‚СѓСЃu   РЎРїРѕСЃРѕР± РѕРїР»Р°С‚С‹u   Р—Р°С‡РёСЃР»РµРЅr"   )r#   r   r$   r)   rL   r&   r%   r/   Ъsubscription_idЪamountrN   Ъpayment_methodЪcreditedr   )r   ЪpaymentsЪpaymentr   s       r   Ъexport_paymentsrg   п   s№   Ђ а
+Џ‰”УЯ	‰”'Ч$С$Ч)С)У+У	,Я	‰‹р с"  ут  €Gр ЏJ‰JШЧСШЧ#С#ШЏN‰NШЏN‰NШЧ"С"ШЧСШЧСу		
+с  р 	р ф Шт		
+ур щтs   БA$C)r*   r3   rA   rO   rV   r]   re   )r   r   Ъsqlalchemy.ormr   Ъmodelsr   r   r   r   r	   r
+   r   r   r,   r5   rC   rQ   rW   r_   rg   ЪEXPORTS© у    r   Ъ<module>rm      sљ   рг 
+Ы 	е "чч с т1р&ф р&ф р@ђwф р@%ф %рP$'ф $рN%Wф %рP!ф !рJ  ШШШШ#Ш)ШсЃrl   
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\services\__pycache__\payment_service.cpython-313.pyc ---
+
+у
+    Uшj¬  г                   у–   • S SK Jr  S SKJr  S SKJr  SSKJrJrJ	r	   SS\S\
+S\
+S	\S
+\4
+S jjrS\S\
+4S jrS\4S jrS\S\
+S\4S jrg)й    )ЪDecimal)ЪHTTPException)ЪSessionй   )ЪPaymentЪSubscriptionЪLessonTransactionЪdbЪ	family_idЪsubscription_idЪamountЪpayment_methodc           	      у  • U R                  [        5      R                  [        R                  U:H  [        R                  U:H  5      R                  5       nU(       d
+  [        SSS9eUR                  (       a
+  [        SSS9eUS:w  a
+  [        SSS9eX5R                  :w  a
+  [        SS	S9e[        UUUS
+USS9n U R                  U5        U R                  5         U R                  U5        U$ ! [         a    U R                  5         e f = f)Nй”  u=   РђР±РѕРЅРµРјРµРЅС‚ РЅРµ РЅР°Р№РґРµРЅ РІ РІР°С€РµР№ СЃРµРјСЊРµ©Ъstatus_codeЪdetailй™  u0   РђР±РѕРЅРµРјРµРЅС‚ СѓР¶Рµ Р°РєС‚РёРІРёСЂРѕРІР°РЅЪdemoйђ  ud   Р’ СЌС‚РѕР№ РІРµСЂСЃРёРё РґРѕСЃС‚СѓРїРЅР° С‚РѕР»СЊРєРѕ РґРµРјРѕРЅСЃС‚СЂР°С†РёРѕРЅРЅР°СЏ РѕРїР»Р°С‚Р°u`   РЎСѓРјРјР° РїР»Р°С‚РµР¶Р° РЅРµ СЃРѕРІРїР°РґР°РµС‚ СЃРѕ СЃС‚РѕРёРјРѕСЃС‚СЊСЋ Р°Р±РѕРЅРµРјРµРЅС‚Р°ЪpendingF)r   r   r   Ъstatusr   Ъcredited)Ъqueryr   ЪfilterЪidr   Ъfirstr   Ъ	is_activeЪpricer   ЪaddЪcommitЪrefreshЪ	ExceptionЪrollback)r
+   r   r   r   r   ЪsubscriptionЪpayments          фG   C:\Users\РјР°РєСЃ\Desktop\yasna\backend\app\services\payment_service.pyЪcreate_paymentr(      s  Ђ р —8‘8њLУ)Ч0С0ЬЏ‰?С*ЬЧС )С+уч Ѓeѓgр ц
+ ЬШШRс
+р 	
+р
+ ЧЧЬШШEс
+р 	
+р
+ УЬШШyс
+р 	
+р
+ Ч#С#У#ЬШШuс
+р 	
+ф
+ ШШ'ШШШ%ШсЂGрШ
+Џ‰€wЊШ
+Џ	‰	ЊШ
+Џ
+‰
+ђ7ФШ€шЬу Ш
+Џ‰ЊШръs   В:3C. Г.D
+c                 уЮ   • U R                  [        5      R                  [        R                  U:H  5      R	                  [        R
+                  R                  5       5      R                  5       $ ©N)r   r   r   r   Ъorder_byЪ
+created_atЪdescЪall)r
+   r   s     r'   Ъget_family_paymentsr/   E   sH   Ђ а
+Џ‰”УЯ	‰”Ч!С! YС.У	/Я	‰”'Ч$С$Ч)С)У+У	,Я	‰‹р	у    c                 ућ   • U R                  [        5      R                  [        R                  R	                  5       5      R                  5       $ r*   )r   r   r+   r,   r-   r.   )r
+   s    r'   Ъget_all_paymentsr2   N   s3   Ђ а
+Џ‰”УЯ	‰”'Ч$С$Ч)С)У+У	,Я	‰‹рr0   Ъ
+payment_idЪ
+new_statusc           
+      у¶  • US;  a
+  [        SSS9eU R                  [        5      R                  [        R                  U:H  5      R                  5       nU(       d
+  [        SSS9eUR                  (       a  US:X  a  U$ [        SS	S9eUR                  S
+:w  a
+  [        SSS9eUS:X  aк  S nUR                  bМ  U R                  [        5      R                  [        R                  UR                  :H  [        R                  UR                  :H  5      R                  5       nU(       d
+  [        SSS9eUR                  (       a
+  [        SSS9eSUl        U R                  [        UR                  S UR                  SSS95        SUl        SUl        OX#l         U R                  5         U R!                  U5        U$ ! ["         a    U R%                  5         e f = f)N>   ЪfailedЪ	cancelledЪ	succeededr   u4   РќРµРґРѕРїСѓСЃС‚РёРјС‹Р№ СЃС‚Р°С‚СѓСЃ РїР»Р°С‚РµР¶Р°r   r   u   РџР»Р°С‚С‘Р¶ РЅРµ РЅР°Р№РґРµРЅr8   r   uh   РЈР¶Рµ РїРѕРґС‚РІРµСЂР¶РґС‘РЅРЅС‹Р№ РїР»Р°С‚С‘Р¶ РЅРµР»СЊР·СЏ РѕС‚РјРµРЅРёС‚СЊ СЌС‚РёРј СЃРїРѕСЃРѕР±РѕРјr   u/   Р­С‚РѕС‚ РїР»Р°С‚С‘Р¶ СѓР¶Рµ РѕР±СЂР°Р±РѕС‚Р°РЅu3   РђР±РѕРЅРµРјРµРЅС‚ РїР»Р°С‚РµР¶Р° РЅРµ РЅР°Р№РґРµРЅuN   РђР±РѕРЅРµРјРµРЅС‚ СѓР¶Рµ Р°РєС‚РёРІРёСЂРѕРІР°РЅ РґСЂСѓРіРёРј РїР»Р°С‚РµР¶РѕРјTЪgrantuG   РќР°С‡РёСЃР»РµРЅРёРµ РїРѕСЃР»Рµ РїРѕРґС‚РІРµСЂР¶РґРµРЅРёСЏ РѕРїР»Р°С‚С‹)r   Ъ
+booking_idr   Ъ	operationЪreason)r   r   r   r   r   r   r   r   r   r   r   r   r    r	   Ъtotal_lessonsr!   r"   r#   r$   )r
+   r3   r4   r&   r%   s        r'   Ъupdate_payment_statusr>   V   sЬ  Ђ р
+ Р=У=ЬШШIс
+р 	
+р
+ Џh‰h”wУЧ&С&ЬЏ
+‰
+ђjС узЃeѓgр ц ЬШШ3с
+р 	
+р ЧЧШУ$Ш€NдШШ}с
+р 	
+р
+ ‡~Ѓ~У"ЬШШDс
+р 	
+р
+ ђ[У Ш€аЧ"С"С.Шџ8™8¤LУ1Ч8С8Ь—‘ 7Ч#:С#:С:ЬЧ&С&Ё'Ч*;С*;С;уч ‰e‹gр ц
+  Ь#Ш #ШPср р
+ Ч%Ч%Ь#Ш #Шkср р &*€LФ"р ЏF‰FФ$Ш ,§ЎШШ#Ч1С1Ш!Ш`сф р %€ЊШ€Хр $ЊрШ
+Џ	‰	ЊШ
+Џ
+‰
+ђ7ФШ€шЬу Ш
+Џ‰ЊШръs   Ж"F< Ж<GN)r   )Ъdecimalr   Ъfastapir   Ъsqlalchemy.ormr   Ъmodelsr   r   r	   ЪintЪstrr(   r/   r2   r>   © r0   r'   Ъ<module>rF      s“   ре е !Э "чс р !с4Шр4ар4р р4р р	4р
+ х4рnGр °ф рф рRШрRарRр хRr0   
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\services\__pycache__\__init__.cpython-313.pyc ---
+
+у
+    D1шj    г                   у   • g )N© r   у    ф@   C:\Users\РјР°РєСЃ\Desktop\yasna\backend\app\services\__init__.pyЪ<module>r      s   сr   
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\__pycache__\database.cpython-313.pyc ---
+
+у
+    24шj¦  г                   уZ   • S SK Jr  S SKJrJr  Sr\" \SS0S9r\" SS\S9r\" 5       rS r	g	)
+й    )Ъcreate_engine)Ъdeclarative_baseЪsessionmakerzsqlite:///./yasna.dbЪcheck_same_threadF)Ъconnect_args)Ъ
+autocommitЪ	autoflushЪbindc               #   уt   #   • [        5       n  U v •  U R                  5         g ! U R                  5         f = f7f)N)ЪSessionLocalЪclose)Ъdbs    ф7   C:\Users\РјР°РєСЃ\Desktop\yasna\backend\app\database.pyЪget_dbr      s(   й Ђ Ь	‹ЂBрШЉа
+Џ‰Ќ
+ш€Џ‰Ќ
+ьs   ‚8Ћ# ’8Ј5µ8N)
+Ъ
+sqlalchemyr   Ъsqlalchemy.ormr   r   ЪDATABASE_URLЪenginer   ЪBaser   © у    r   Ъ<module>r      sM   ре $Я 9р &Ђс 
+ШШ% uР-с
+Ђс ШШШ	сЂс УЂуr   
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\__pycache__\main.cpython-313.pyc ---
+
+у
+    ћXшjв  г                   уL  • S SK Jr  S SKJr  SSKJrJr  SSKJr  SSK	J
+r
+JrJrJrJrJrJrJrJrJr  \" SSS	S
+9r\R+                  \
+R,                  5        \R+                  \R,                  5        \R+                  \R,                  5        \R+                  \R,                  5        \R+                  \R,                  5        \R+                  \R,                  5        \R+                  \R,                  5        \R+                  \R,                  5        \R+                  \R,                  5        \R+                  \R,                  5        \R/                  \/ SQSS/S/S9  \R1                  S5      S 5       r\R1                  S5      S 5       r\R7                  S5      S 5       rg)й    )ЪFastAPI)ЪCORSMiddlewareй   )ЪBaseЪengine)Ъmodels)
+ЪmasterЪfamilyЪlessonsЪbookingsЪ
+attendanceЪsubscriptionsЪpaymentsЪreceiptsЪnotificationsЪreportsu   РЇСЃРЅР° APIu`   РЎРёСЃС‚РµРјР° Р·Р°РїРёСЃРё Рё СѓС‡С‘С‚Р° Р·Р°РЅСЏС‚РёР№ СЃС‚РѕР»СЏСЂРЅРѕР№ РјР°СЃС‚РµСЂСЃРєРѕР№z1.0.0)ЪtitleЪdescriptionЪversion)zhttp://127.0.0.1:5500zhttp://localhost:5500zhttp://127.0.0.1:8000zhttp://localhost:8000TЪ*)Ъallow_originsЪallow_credentialsЪallow_methodsЪallow_headersЪ/c                  у   • SSS.$ )Nu   РЇСЃРЅР°u   РЎРµСЂРІРµСЂ СЂР°Р±РѕС‚Р°РµС‚)ЪprojectЪmessage© r   у    ф3   C:\Users\РјР°РєСЃ\Desktop\yasna\backend\app\main.pyЪhomer"   3   s   Ђ р Ш2ср r    z/api/healthc                  у   • SSS.$ )NЪokЪyasna)Ъstatusr   r   r   r    r!   Ъhealth_checkr'   ;   s   Ђ р Шср r    Ъstartupc                  уF   • [         R                  R                  [        S9  g )N)Ъbind)r   ЪmetadataЪ
+create_allr   r   r    r!   Ъcreate_database_tablesr-   C   s   Ђ д‡MЃMЧС¤&РТ)r    N)Ъfastapir   Ъfastapi.middleware.corsr   Ъdatabaser   r   Ъ r   Ъroutersr	   r
+   r   r   r   r   r   r   r   r   ЪappЪinclude_routerЪrouterЪadd_middlewareЪgetr"   r'   Ъon_eventr-   r   r    r!   Ъ<module>r9      ss  рЭ Э 2Я "Э чч ч с Ш
+ШrШсЂр Ч С ђ6—=‘=Ф !Ш Ч С ђ6—=‘=Ф !Ш Ч С ђ7—>‘>Ф "Ш Ч С ђ8—?‘?Ф #Ш Ч С ђ:Ч$С$Ф %Ш Ч С ђ=Ч'С'Ф (Ш Ч С ђ8—?‘?Ф #Ш Ч С ђ8—?‘?Ф #Ш Ч С ђ=Ч'С'Ф (Ш Ч С ђ7—>‘>Ф "р Ч С Штр Шђ%Шђ%р с р ‡Ѓ€ѓсу рр ‡Ѓ€Усу рр ‡Ѓ€iУс*у с*r    
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\__pycache__\models.cpython-313.pyc ---
+
+у
+    R4шjЉ  г                   у\  • S SK J r   S SKJrJrJrJrJrJrJrJ	r	J
+r
+  S SKJr  SSKJr   " S S\5      r " S S	\5      r " S
+ S\5      r " S S\5      r " S S\5      r " S S\5      r " S S\5      r " S S\5      r " S S\5      r " S S\5      r " S S\5      r " S S\5      rg)й    )Ъdatetime)	ЪColumnЪIntegerЪStringЪBooleanЪDateTimeЪ
+ForeignKeyЪUniqueConstraintЪTextЪNumeric)Ъrelationshipй   )ЪBasec                   уљ   • \ rS rSrSr\" \SSS9r\" \" S5      SS9r	\" \" S5      SS9r
+\" \\R                  S	9r\" S
+SS9r\" SSS9rSrg)ЪFamilyй   ЪfamiliesT©Ъprimary_keyЪindexй–   F©Ъnullableй   ©ЪdefaultЪChildЪfamily©Ъback_populatesЪFamilyToken© N)Ъ__name__Ъ
+__module__Ъ__qualname__Ъ__firstlineno__Ъ__tablename__r   r   Ъidr   ЪnameЪphoner   r   ЪutcnowЪ
+created_atr   ЪchildrenЪtokensЪ__static_attributes__r"   у    ф5   C:\Users\РјР°РєСЃ\Desktop\yasna\backend\app\models.pyr   r      s]   † ШЂMб	ђ T°С	6ЂBЩ‘&“+ЁС.ЂDЩ‘6"“:ЁС-ЂEЩЁ(Ї/©/С:ЂJбG°HС=ЂHЩ-ёСAѓFr0   r   c                   уР   • \ rS rSrSr\" \SSS9r\" \\" S5      SS9r	\" \
+" S5      SS9r\" \
+" S5      SS9r\" \
+" S	5      SS9r\" \\R                   S
+9r\" SSS9r\" SSS9rSrg)r   й#   r-   Tr   ъfamilies.idFr   йd   й   r   r   r   ЪBookingЪchildr"   N)r#   r$   r%   r&   r'   r   r   r(   r	   Ъ	family_idr   Ъ
+first_nameЪ	last_nameЪ
+birth_dater   r   r+   r,   r   r   Ъbookingsr/   r"   r0   r1   r   r   #   sЂ   † ШЂMб	ђ T°С	6ЂBЩђwЎ
+Ё=У 9АEСJЂIЩ™s›ЁeС4ЂJЩ‘vc“{ЁTС2ЂIЩ™r›
+ЁTС2ЂJЩЁ(Ї/©/С:ЂJб(°:С>ЂFЩI°gС>ѓHr0   r   c                   у¬   • \ rS rSrSr\" \SSS9r\" \\" S5      SS9r	\" \
+" S5      SSS	9r\" \SS
+9r\" \\R                   S
+9r\" \SS9r\" SSS9rSrg)r!   й2   Ъfamily_tokensTr   r4   Fr   й@   ©Ъuniquer   r   r   r.   r   r"   N)r#   r$   r%   r&   r'   r   r   r(   r	   r9   r   Ъ
+token_hashr   Ъ	is_activer   r   r+   r,   Ъ
+revoked_atr   r   r/   r"   r0   r1   r!   r!   2   sn   † Ш#ЂMб	ђ T°С	6ЂBЩђwЎ
+Ё=У 9АEСJЂIЩ™r›
+Ё4ё%С@ЂJЩђwЁС-ЂIЩЁ(Ї/©/С:ЂJЩЁ4С0ЂJб(°8С<ѓFr0   r!   c                   уФ   • \ rS rSrSr\" \SSS9r\" \" S5      SS9r	\" \
+SS9r\" \SS9r\" \SS	9r\" \SS9r\" \" S
+S5      SS	9r\" \SS	9r\" \\R*                  S	9r\" SSS9rSrg)ЪLessonrA   ЪlessonsTr   r   Fr   й<   r   й
+   й   r   r7   Ъlessonr   r"   N)r#   r$   r%   r&   r'   r   r   r(   r   Ъtitler   Ъdescriptionr   Ъ	starts_atЪduration_minutesЪcapacityr   Ъpricer   rE   r   r+   r,   r   r=   r/   r"   r0   r1   rH   rH   @   sђ   † ШЂMб	ђ T°С	6ЂBЩ‘6#“;ЁС/ЂEЩЁС-ЂKЩђxЁ%С0ЂIЩgЁrС2РЩђgЁС.ЂHЩ‘72q“>Ё1С-ЂEЩђwЁС-ЂIЩЁ(Ї/©/С:ЂJбI°hС?ѓHr0   rH   c                   уЪ   • \ rS rSrSr\" \SSS9r\" \\" S5      SS9r	\" \\" S5      SS9r
+\" \" S	5      S
+S9r\" \\R                  S9r\" SSSS94r\" SSS9r\" SSS9r\" SSSS9rSrg)r7   йQ   r=   Tr   ъchildren.idFr   z
+lessons.idr6   Ъbookedr   Ъchild_idЪ	lesson_idЪunique_child_lesson_booking)r)   r   r   rH   Ъ
+AttendanceЪbooking)r    Ъuselistr"   N)r#   r$   r%   r&   r'   r   r   r(   r	   rX   rY   r   Ъstatusr   r   r+   r,   r
+   Ъ__table_args__r   r8   rM   Ъ
+attendancer/   r"   r0   r1   r7   r7   Q   sў   † ШЂMб	ђ T°С	6ЂBЩђg™zЁ-У8А5СIЂHЩђwЎ
+Ё<У 8А5СIЂIЩ‘F2“JЁС1ЂFЩЁ(Ї/©/С:ЂJс 	ШШШ.с	
+рЂNс °С<ЂEЩ(°:С>ЂFЩШШ ШсѓJr0   r7   c                   уђ   • \ rS rSrSr\" \SSS9r\" \\" S5      SSS9r	\" \
+" S5      SS	9r\" \\R                  S
+9r\" SSS9rSrg)r[   йl   r`   Tr   ъbookings.idFrB   r6   r   r   r7   r   r"   N)r#   r$   r%   r&   r'   r   r   r(   r	   Ъ
+booking_idr   r^   r   r   r+   Ъ	marked_atr   r\   r/   r"   r0   r1   r[   r[   l   s^   † Ш ЂMб	ђ T°С	6ЂBЩШЩђ=У!ШШс	ЂJс ‘F2“JЁС/ЂFЩђxЁЇ©С9ЂIб9°\СBѓGr0   r[   c                   уЁ   • \ rS rSrSr\" \SSS9r\" \\" S5      SS9r	\" \
+" S5      SS9r\" \
+" S5      SS9r\" \\R                  S	9r\" \SS9rS
+rg)ЪAttendanceHistoryй}   Ъattendance_historyTr   zattendance.idFr   r6   r   r"   N)r#   r$   r%   r&   r'   r   r   r(   r	   Ъattendance_idr   Ъ
+old_statusЪ
+new_statusr   r   r+   Ъ
+changed_atr   Ъcommentr/   r"   r0   r1   rg   rg   }   sk   † Ш(ЂMб	ђ T°С	6ЂBЩШЩђ?У#ШсЂMс
+ ™r›
+ЁTС2ЂJЩ™r›
+ЁUС3ЂJЩЁ(Ї/©/С:ЂJЩђT DС)ѓGr0   rg   c                   ур   • \ rS rSrSr\" \SSS9r\" \\" S5      SS9r	\" \\" S5      SS9r
+\" \" S	5      SS9r\" \SS9r\" \S
+S9r\" \" SS5      SS9r\" \SS9r\" \SS9r\" \\R,                  S9rSrg)ЪSubscriptionйЌ   ЪsubscriptionsTr   r4   Fr   rV   r   r   r   rK   rL   r"   N)r#   r$   r%   r&   r'   r   r   r(   r	   r9   rX   r   rN   Ъtotal_lessonsЪused_lessonsr   rS   r   Ъ
+expires_atr   rE   r   r+   r,   r/   r"   r0   r1   rp   rp   Ќ   sќ   † Ш#ЂMб	ђ T°С	6ЂBЩђwЎ
+Ё=У 9АEСJЂIЩђg™zЁ-У8А4СHЂHЩ‘6#“;ЁС/ЂEЩ7ЁUС3ЂMЩ'Ё1С-ЂLЩ‘72q“>ЁEС2ЂEЩЁ4С0ЂJЩђwЁС-ЂIЩЁ(Ї/©/С:ѓJr0   rp   c                   уД   • \ rS rSrSr\" \SSS9r\" \\" S5      SS9r	\" \\" S5      SS9r
+\" \SS9r\" \" S	5      SS9r\" \" S
+5      SS9r\" \\R"                  S9rSrg)ЪLessonTransactionйќ   Ъlesson_transactionsTr   ъsubscriptions.idFr   rc   r6   йИ   r   r"   N)r#   r$   r%   r&   r'   r   r   r(   r	   Ъsubscription_idrd   Ъamountr   Ъ	operationЪreasonr   r   r+   r,   r/   r"   r0   r1   rw   rw   ќ   s†   † Ш)ЂMб	ђ T°С	6ЂBЩШЩР%У&ШсЂOс
+ ШЩђ=У!ШсЂJс
+ ђG eС,ЂFЩ‘vb“zЁEС2ЂIЩ‘F3“KЁ$С/ЂFЩЁ(Ї/©/С:ѓJr0   rw   c                   уь   • \ rS rSrSr\" \SSS9r\" \\" S5      SS9r	\" \\" S5      SS9r
+\" \" S	S
+5      SS9r\" \" S5      SS9r\" \" S5      SS9r\" \" S5      SSS9r\" \SS9r\" \\R*                  S9rSrg)ЪPaymentйІ   ЪpaymentsTr   r4   Fr   rz   rK   rL   r6   Ъpendingr   r   Ъdemor   rB   r"   N)r#   r$   r%   r&   r'   r   r   r(   r	   r9   r|   r   r}   r   r^   Ъpayment_methodЪexternal_payment_idr   Ъcreditedr   r   r+   r,   r/   r"   r0   r1   rЃ   rЃ   І   s¤   † ШЂMб	ђ T°С	6ЂBЩђwЎ
+Ё=У 9АEСJЂIЩШЩР%У&ШсЂOс
+ ‘GB “NЁUС3ЂFЩ‘F2“JЁ	С2ЂFЩ™F 2›J°С7ЂNЩ ЎЁЈ°TАDСIРЩђg uС-ЂHЩЁ(Ї/©/С:ѓJr0   rЃ   c                   уљ   • \ rS rSrSr\" \SSS9r\" \\" S5      SS9r	\" \
+" S5      SS9r\" \
+" S	5      SS9r\" \\R                  S
+9rSrg)ЪReceiptйЕ   ЪreceiptsTr   zpayments.idFr   iф  iи  r   r"   N)r#   r$   r%   r&   r'   r   r   r(   r	   Ъ
+payment_idr   Ъ	file_pathЪreceipt_urlr   r   r+   r,   r/   r"   r0   r1   rЉ   rЉ   Е   s_   † ШЂMб	ђ T°С	6ЂBЩШЩђ=У!ШсЂJс
+ ‘vc“{ЁTС2ЂIЩ™ ›°С5ЂKЩЁ(Ї/©/С:ѓJr0   rЉ   c                   уњ   • \ rS rSrSr\" \SSS9r\" \\" S5      SS9r	\" \
+" S5      SS9r\" \SS9r\" \SS	9r\" \\R$                  S	9rS
+rg)ЪNotificationйФ   ЪnotificationsTr   r4   Fr   r{   r   r"   N)r#   r$   r%   r&   r'   r   r   r(   r	   r9   r   rN   r   Ъmessager   Ъis_readr   r   r+   r,   r/   r"   r0   r1   r‘   r‘   Ф   s`   † Ш#ЂMб	ђ T°С	6ЂBЩђwЎ
+Ё=У 9АEСJЂIЩ‘6#“;ЁС/ЂEЩђT EС*ЂGЩђW eС,ЂGЩЁ(Ї/©/С:ѓJr0   r‘   N)r   Ъ
+sqlalchemyr   r   r   r   r   r	   r
+   r   r   Ъsqlalchemy.ormr   Ъdatabaser   r   r   r!   rH   r7   r[   rg   rp   rw   rЃ   rЉ   r‘   r"   r0   r1   Ъ<module>r™      sµ   ре ч
+ч 
+х 
+х (е ф	B€Tф 	Bф?€Dф ?ф
+=ђ$ф 
+=ф@€Tф @ф"€dф ф6Cђф Cф"*ф *ф ;ђ4ф ;ф ;ф ;ф*;€dф ;ф&;€dф ;ф;ђ4х ;r0   
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\__pycache__\schemas.cpython-313.pyc ---
+
+у
+    ”6шj  г                   у†  • S SK J r   S SKJr  S SKJrJrJrJr   " S S\5      r " S S\5      r	 " S S	\5      r
+ " S
+ S\5      r " S S\5      r " S S\5      r " S S\5      r " S S\5      r " S S\5      r " S S\5      r " S S\5      r " S S\5      r " S S\5      r " S S\5      r " S  S!\5      r " S" S#\5      r " S$ S%\5      r " S& S'\5      r " S( S)\5      r " S* S+\5      r " S, S-\5      r " S. S/\5      r " S0 S1\5      r " S2 S3\5      r " S4 S5\5      r  " S6 S7\5      r! " S8 S9\5      r"g:);й    )Ъdatetime)ЪDecimal)Ъ	BaseModelЪ
+ConfigDictЪFieldЪHttpUrlc                   у    • \ rS rSr\" SS9rSrg)ЪORMModelй   T)Ъfrom_attributes© N)Ъ__name__Ъ
+__module__Ъ__qualname__Ъ__firstlineno__r   Ъmodel_configЪ__static_attributes__r   у    ф6   C:\Users\РјР°РєСЃ\Desktop\yasna\backend\app\schemas.pyr
+   r
+      s   † ЩЁdС3ѓLr   r
+   c                   уL   • \ rS rSr% \" SSS9r\\S'   \" SSS9r\S-  \S	'   S
+r	g)ЪFamilyCreateй   й   й–   ©Ъ
+min_lengthЪ
+max_lengthЪnameNй   ©Ъdefaultr   Ъphoner   )
+r   r   r   r   r   r   ЪstrЪ__annotations__r"   r   r   r   r   r   r      s(   ‡ Щ ЁsС3ЂD€#У3Щ d°rС:ЂE€3ђ‰:Ц:r   r   c                   уH   • \ rS rSr% \\S'   \\S'   Sr\S-  \S'   \\S'   Sr	g)ЪFamilyResponseй   Ъidr   Nr"   Ъ
+created_atr   )
+r   r   r   r   Ъintr$   r#   r"   r   r   r   r   r   r&   r&      s    ‡ ШѓGШ
+ѓIШЂE€3ђ‰:УШЦr   r&   c                   у`   • \ rS rSr% \" SSS9r\\S'   \" SSS9r\S-  \S'   Sr	\S-  \S	'   S
+r
+g)ЪChildCreateй   r   йd   r   Ъ
+first_nameNr    Ъ	last_nameЪ
+birth_dater   )r   r   r   r   r   r/   r#   r$   r0   r1   r   r   r   r   r,   r,      s6   ‡ Щ q°SС9ЂJђУ9Щ!Ё$ё3С?ЂI€sђT‰zУ?Ш!ЂJђђd‘
+Ц!r   r,   c                   уf   • \ rS rSr% \\S'   \\S'   \\S'   Sr\S-  \S'   Sr\S-  \S'   \	\S'   S	r
+g)
+ЪChildResponseй"   r(   Ъ	family_idr/   Nr0   r1   r)   r   )r   r   r   r   r*   r$   r#   r0   r1   r   r   r   r   r   r3   r3   "   s3   ‡ ШѓGШѓNШѓOШ ЂI€sђT‰zУ Ш!ЂJђђd‘
+У!ШЦr   r3   c                   уў   • \ rS rSr% \" SSS9r\\S'   Sr\S-  \S'   \	\S'   \" S	SS
+S9r
+\\S'   \" SSS9r\\S'   \" \" S5      SS9r\\S'   Srg)ЪLessonCreateй-   r   йИ   r   ЪtitleNЪdescriptionЪ	starts_atй<   iX  )r!   ЪgeЪleЪduration_minutesr.   )r>   r?   ЪcapacityЪ0r   ©r!   r>   Ъpricer   )r   r   r   r   r   r:   r#   r$   r;   r   r@   r*   rA   r   rD   r   r   r   r   r7   r7   -   sa   ‡ Щ !°С4ЂE€3У4Ш"ЂKђђt‘У"ШУЩ!Ё"°°sС;РђcУ;ЩQ 3С'ЂH€cУ'ЩЎ7Ё3Ј<°AС6ЂE€7Ц6r   r7   c                   уz   • \ rS rSr% \\S'   \\S'   Sr\S-  \S'   \\S'   \\S'   \\S'   \	\S	'   \
+\S
+'   \\S'   Srg)ЪLessonResponseй6   r(   r:   Nr;   r<   r@   rA   rD   Ъ	is_activer)   r   )r   r   r   r   r*   r$   r#   r;   r   r   Ъboolr   r   r   r   rF   rF   6   s;   ‡ ШѓGШѓJШ"ЂKђђt‘У"ШУШУШѓMШѓNШѓOШЦr   rF   c                   у*   • \ rS rSr% \\S'   \\S'   Srg)ЪLessonPublicResponseйB   Ъbooked_countЪfree_placesr   N)r   r   r   r   r*   r$   r   r   r   r   rK   rK   B   s   ‡ ШУШЦr   rK   c                   уB   • \ rS rSr% \" SS9r\\S'   \" SS9r\\S'   Sr	g)ЪBookingCreateйI   r   ©ЪgtЪchild_idЪ	lesson_idr   N)
+r   r   r   r   r   rT   r*   r$   rU   r   r   r   r   rP   rP   I   s   ‡ ЩQ‘KЂH€cУЩa‘[ЂI€sЦ r   rP   c                   уH   • \ rS rSr% \\S'   \\S'   \\S'   \\S'   \\S'   Srg)	ЪBookingResponseйN   r(   rT   rU   Ъstatusr)   r   N)	r   r   r   r   r*   r$   r#   r   r   r   r   r   rW   rW   N   s   ‡ ШѓGШѓMШѓNШѓKШЦr   rW   c                   у@   • \ rS rSr% \" SS9r\\S'   Sr\S-  \S'   Sr	g)ЪAttendanceUpdateйX   z^(attended|missed|cancelled)$©ЪpatternrY   NЪcommentr   )
+r   r   r   r   r   rY   r#   r$   r_   r   r   r   r   r[   r[   X   s    ‡ ЩР ?С@ЂF€CУ@ШЂG€Sђ4‰ZЦr   r[   c                   уH   • \ rS rSr% \\S'   \\S'   \\S'   Sr\S-  \S'   Sr	g)ЪAttendanceResponseй]   r(   Ъ
+booking_idrY   NЪ	marked_atr   )
+r   r   r   r   r*   r$   r#   rd   r   r   r   r   r   ra   ra   ]   s   ‡ ШѓGШѓOШѓKШ!%ЂI€x$‰Ц%r   ra   c                   уf   • \ rS rSr% \\S'   \\S'   Sr\S-  \S'   \\S'   \\S'   Sr	\S-  \S'   S	r
+g)
+ЪAttendanceHistoryResponser.   r(   Ъattendance_idNЪ
+old_statusЪ
+new_statusЪ
+changed_atr_   r   )r   r   r   r   r*   r$   rh   r#   r   r_   r   r   r   r   rf   rf   d   s4   ‡ ШѓGШУШ!ЂJђђd‘
+У!ШѓOШУШЂG€Sђ4‰ZЦr   rf   c                   у°   • \ rS rSr% \" SS9r\\S'   \" SSS9r\S-  \S'   \" SS	S
+9r	\
+\S'   \" SS9r\\S'   \" \" S5      SS9r\\S'   Sr\S-  \S'   Srg)ЪSubscriptionCreateйo   r   rR   r5   N©r!   rS   rT   r   r   r   r:   )r>   Ъtotal_lessonsrB   rC   rD   Ъ
+expires_atr   )r   r   r   r   r   r5   r*   r$   rT   r:   r#   ro   r   rD   rp   r   r   r   r   r   rl   rl   o   sg   ‡ Щa‘[ЂI€sУ Щ Ё°!С4ЂH€cђD‰jУ4Щ !°С4ЂE€3У4Щ !™ЂMђ3У$ЩЎ7Ё3Ј<°AС6ЂE€7У6Ш"&ЂJђ4‘Ц&r   rl   c                   уЋ   • \ rS rSr% \\S'   \\S'   Sr\S-  \S'   \\S'   \\S'   \\S'   \\S	'   Sr	\
+S-  \S
+'   \\S'   \
+\S'   Srg)ЪSubscriptionResponseйx   r(   r5   NrT   r:   ro   Ъused_lessonsrD   rp   rH   r)   r   )r   r   r   r   r*   r$   rT   r#   r   rp   r   rI   r   r   r   r   rr   rr   x   sI   ‡ ШѓGШѓNШЂH€cђD‰jУШѓJШУШУШѓNШ"&ЂJђ4‘У&ШѓOШЦr   rr   c                   уN   • \ rS rSr% \\S'   \\S'   \\S'   \" S5      r\\S'   Srg)	ЪSubscriptionBalanceй…   ro   rt   Ъremaining_lessonsrB   Ъmoney_balancer   N)	r   r   r   r   r*   r$   r   ry   r   r   r   r   rv   rv   …   s"   ‡ ШУШУШУЩ$ S›\ЂMђ7Ц)r   rv   c                   уx   • \ rS rSr% \" SS9r\\S'   \" SSS9r\S-  \S'   \" SS9r	\
+\S'   \" S	S
+S9r\\S'   Srg)ЪPaymentCreateйЋ   r   rR   r5   Nrn   Ъsubscription_idЪamountЪdemor   r    Ъpayment_methodr   )r   r   r   r   r   r5   r*   r$   r}   r~   r   rЂ   r#   r   r   r   r   r{   r{   Ћ   sD   ‡ Щa‘[ЂI€sУ Щ"'°ёС";ЂOђS4‘ZУ;Щq‘kЂF€GУ!ЩЁё2С>ЂNђCЦ>r   r{   c                   у„   • \ rS rSr% \\S'   \\S'   Sr\S-  \S'   \\S'   \\S'   \\S'   Sr	\S-  \S	'   \
+\S
+'   \\S'   Srg)ЪPaymentResponseй•   r(   r5   Nr}   r~   rY   rЂ   Ъexternal_payment_idЪcreditedr)   r   )r   r   r   r   r*   r$   r}   r   r#   r„   rI   r   r   r   r   r   r‚   r‚   •   sD   ‡ ШѓGШѓNШ"&ЂOђS4‘ZУ&ШѓOШѓKШУШ&*Рt™У*ШѓNШЦr   r‚   c                   у,   • \ rS rSr% \" SS9r\\S'   Srg)ЪPaymentStatusUpdateйЎ   z&^(pending|succeeded|failed|cancelled)$r]   rY   r   N)	r   r   r   r   r   rY   r#   r$   r   r   r   r   r‡   r‡   Ў   s   ‡ ЩР HСIЂF€CЦIr   r‡   c                   у    • \ rS rSr% \\S'   Srg)ЪReceiptLinkCreateй§   Ъreceipt_urlr   N)r   r   r   r   r   r$   r   r   r   r   rЉ   rЉ   §   s   ‡ ШЦr   rЉ   c                   у\   • \ rS rSr% \\S'   \\S'   Sr\S-  \S'   Sr\S-  \S'   \	\S'   Sr
+g)	ЪReceiptResponseй«   r(   Ъ
+payment_idNЪ	file_pathrЊ   r)   r   )r   r   r   r   r*   r$   r‘   r#   rЊ   r   r   r   r   r   rЋ   rЋ   «   s.   ‡ ШѓGШѓOШ ЂI€sђT‰zУ Ш"ЂKђђt‘У"ШЦr   rЋ   c                   уR   • \ rS rSr% \\S'   \\S'   \\S'   \\S'   \\S'   \\S'   Sr	g	)
+ЪNotificationResponseйµ   r(   r5   r:   ЪmessageЪis_readr)   r   N)
+r   r   r   r   r*   r$   r#   rI   r   r   r   r   r   r“   r“   µ   s!   ‡ ШѓGШѓNШѓJШѓLШѓMШЦr   r“   c                   у.   • \ rS rSr% \" SSS9r\\S'   Srg)ЪMasterLoginйА   r   r9   r   Ъpasswordr   N)	r   r   r   r   r   rљ   r#   r$   r   r   r   r   r   r   А   s   ‡ Щ Q°3С7ЂH€cЦ7r   r   c                   у.   • \ rS rSr% \\S'   Sr\\S'   Srg)ЪMasterLoginResponseйД   Ъaccess_tokenЪbearerЪ
+token_typer   N)r   r   r   r   r#   r$   r    r   r   r   r   rњ   rњ   Д   s   ‡ ШУШЂJђЦr   rњ   c                   уF   • \ rS rSr% \\S'   \\S'   Sr\\S'   Sr\\S'   Sr	g	)
+ЪFamilyLinkResponseйЙ   r5   rћ   rџ   r    ub   РЎРѕС…СЂР°РЅРёС‚Рµ СЃСЃС‹Р»РєСѓ: С‚РѕРєРµРЅ РїРѕРєР°Р·С‹РІР°РµС‚СЃСЏ С‚РѕР»СЊРєРѕ РѕРґРёРЅ СЂР°Р·.r•   r   N)
+r   r   r   r   r*   r$   r#   r    r•   r   r   r   r   rў   rў   Й   s!   ‡ ШѓNШУШЂJђУШwЂG€SЦwr   rў   c                   у    • \ rS rSr% \\S'   Srg)ЪMessageResponseйТ   r•   r   N©r   r   r   r   r#   r$   r   r   r   r   rҐ   rҐ   Т   s   ‡ Ш†Lr   rҐ   c                   у*   • \ rS rSr% \\S'   \\S'   Srg)ЪHealthResponseйЦ   rY   Ъprojectr   Nr§   r   r   r   r©   r©   Ц   s   ‡ ШѓKШ†Lr   r©   N)#r   Ъdecimalr   Ъpydanticr   r   r   r   r
+   r   r&   r,   r3   r7   rF   rK   rP   rW   r[   ra   rf   rl   rr   rv   r{   r‚   r‡   rЉ   rЋ   r“   r   rњ   rў   rҐ   r©   r   r   r   Ъ<module>r®      sY  ре Э Я :У :ф4€yф 4ф;ђ9ф ;ф
+ђXф ф"ђ)ф "фђHф ф7ђ9ф 7ф	ђXф 	ф>ф ф!ђIф !ф
+ђhф фђyф ф
+&ф &ф ф ф'ф 'ф
+8ф 
+ф*)ф *ф?ђIф ?ф	ђhф 	фJ)ф Jф	ф фђhф ф8ф ф8ђ)ф 8ф)ф ф
+xф xфђiф фђYх r   
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\__pycache__\security.cpython-313.pyc ---
+
+у
+    7шj<  г                   уL  • S SK r S SKrS SKrS SKrS SKrS SKJrJrJr  S SK	J
+r
+Jr  S SKJr  SSKJr  SSKJr  \R$                  " SS	5      rS
+r0 r\" SS9rS\S\4S jrS\\\4   4S jrS\S\4S jr\" \5      4S\
+S-  S\4S jjr\" \5      \" \5      4S\
+S-  S\4S jjrg)й    N)ЪDependsЪHTTPExceptionЪstatus)ЪHTTPAuthorizationCredentialsЪ
+HTTPBearer)ЪSessionй   )Ъget_db)ЪFamilyTokenЪMASTER_PASSWORDzyasna-demo-2026iАЁ  F)Ъ
+auto_errorЪtokenЪreturnc                 уh   • [         R                  " U R                  S5      5      R                  5       $ )u1   Р’РѕР·РІСЂР°С‰Р°РµС‚ SHA-256-С…РµС€ С‚РѕРєРµРЅР°.zutf-8)ЪhashlibЪsha256ЪencodeЪ	hexdigest)r   s    ф7   C:\Users\РјР°РєСЃ\Desktop\yasna\backend\app\security.pyЪ
+hash_tokenr      s#   Ђ дЏ>Љ>%џ,™, wУ/У0Ч:С:У<Р<у    c                  уJ   • [         R                  " S5      n [        U 5      nX4$ )u§   
+РЎРѕР·РґР°С‘С‚ СЃР»СѓС‡Р°Р№РЅС‹Р№ С‚РѕРєРµРЅ СЃРµРјСЊРё.
+Р’РѕР·РІСЂР°С‰Р°РµС‚ СЃР°Рј С‚РѕРєРµРЅ Рё РµРіРѕ С…РµС€.
+Р’ Р±Р°Р·Рµ СЃРѕС…СЂР°РЅСЏРµРј С‚РѕР»СЊРєРѕ С…РµС€.
+й    )ЪsecretsЪtoken_urlsafer   )r   Ъ
+token_hashs     r   Ъgenerate_family_tokenr   !   s'   Ђ ф Ч!Т! "У%ЂEЬEУ"ЂJШРРr   Ъpasswordc                 уи   • [         R                  " U [        5      (       d  [        [        R
+                  SS9e[        R                  " S5      n[        R                  " 5       [        -   [        U'   U$ )ua   РџСЂРѕРІРµСЂСЏРµС‚ РїР°СЂРѕР»СЊ РјР°СЃС‚РµСЂР° Рё СЃРѕР·РґР°С‘С‚ РІСЂРµРјРµРЅРЅСѓСЋ СЃРµСЃСЃРёСЋ.u,   РќРµРІРµСЂРЅС‹Р№ РїР°СЂРѕР»СЊ РјР°СЃС‚РµСЂР°©Ъstatus_codeЪdetailr   )ЪhmacЪcompare_digestr   r   r   ЪHTTP_401_UNAUTHORIZEDr   r   ЪtimeЪMASTER_SESSION_SECONDSЪ_master_sessions)r   r   s     r   Ъcreate_master_sessionr)   ,   s\   Ђ дЧТx¬Ч9С9ЬЬЧ4С4ШAс
+р 	
+ф
+ Ч!Т! "У%ЂEЬ"џiљi›kФ,BСBФђUСШЂLr   Ъcredentialsc                 у  • U c  [        [        R                  SS9eU R                  n[        R                  U5      nUb  U[        R                  " 5       :  a.  [        R                  US5        [        [        R                  SS9eg)u4   РџСЂРѕРІРµСЂСЏРµС‚ bearer-С‚РѕРєРµРЅ РјР°СЃС‚РµСЂР°.Nu8   РўСЂРµР±СѓРµС‚СЃСЏ Р°РІС‚РѕСЂРёР·Р°С†РёСЏ РјР°СЃС‚РµСЂР°r    uP   РЎРµСЃСЃРёСЏ РјР°СЃС‚РµСЂР° РЅРµРґРµР№СЃС‚РІРёС‚РµР»СЊРЅР° РёР»Рё РёСЃС‚РµРєР»Р°T)r   r   r%   r*   r(   Ъgetr&   Ъpop)r*   r   Ъ
+expires_ats      r   Ъget_current_masterr/   9   sЃ   Ђ р СЬЬЧ4С4ШMс
+р 	
+р
+ Ч#С#ЂEЬ!Ч%С% eУ,ЂJаСZ¬$Ї)Є)«+У5ЬЧСU DФ)ЬЬЧ4С4Шeс
+р 	
+р
+ r   Ъdbc                 уr  • U c  [        [        R                  SS9e[        U R                  5      nUR                  [        5      R                  [        R                  U:H  5      R                  5       nUb  UR                  (       a  UR                  b  [        [        R                  SS9eUR                  $ )uZ   РќР°С…РѕРґРёС‚ СЃРµРјСЊСЋ РїРѕ Р°РєС‚РёРІРЅРѕРјСѓ РїРµСЂСЃРѕРЅР°Р»СЊРЅРѕРјСѓ С‚РѕРєРµРЅСѓ.uC   РўСЂРµР±СѓРµС‚СЃСЏ РїРµСЂСЃРѕРЅР°Р»СЊРЅР°СЏ СЃСЃС‹Р»РєР° СЃРµРјСЊРёr    uC   РЎСЃС‹Р»РєР° РЅРµРґРµР№СЃС‚РІРёС‚РµР»СЊРЅР° РёР»Рё РѕС‚РѕР·РІР°РЅР°)r   r   r%   r   r*   Ъqueryr   Ъfilterr   ЪfirstЪ	is_activeЪ
+revoked_atЪfamily)r*   r0   r   Ъfamily_tokens       r   Ъget_current_familyr9   P   sЁ   Ђ р
+ СЬЬЧ4С4ШXс
+р 	
+ф
+ KЧ3С3У4ЂJр 	Џ‰”УЯ	‰”Ч&С&Ё*С4У	5Я	‰‹р р 	СШЧ%Ч%ШЧ"С"С.дЬЧ4С4ШXс
+р 	
+р
+ ЧСРr   )r   r#   Ъosr   r&   Ъfastapir   r   r   Ъfastapi.securityr   r   Ъsqlalchemy.ormr   Ъdatabaser
+   Ъmodelsr   Ъgetenvr   r'   r(   Ъbearer_schemeЪstrr   Ъtupler   r)   Ъboolr/   r9   © r   r   Ъ<module>rF      sЫ   рг Ы Ы 	Ы Ы з 2С 2Я EЭ "е Э р
+ —)’)Р-Р/@УAЂр &Р ШР б eС,Ђр=ђcр =cф =р
+u SЁ# X™ф р
+ Cр 
+ЁCф 
+с 8?ё}У7MсШ-°С4ра	хс0 8?ё}У7MЩ&“/сШ-°С4рацr   
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\app\__pycache__\__init__.cpython-313.pyc ---
+
+у
+    B1шj    г                   у   • g )N© r   у    ф7   C:\Users\РјР°РєСЃ\Desktop\yasna\backend\app\__init__.pyЪ<module>r      s   сr   
+
+--- айл: C:\Users\макс\Desktop\yasna\backend\__pycache__\__init__.cpython-313.pyc ---
+
+у
+    B1шj    г                   у   • g )N© r   у    ф3   C:\Users\РјР°РєСЃ\Desktop\yasna\backend\__init__.pyЪ<module>r      s   сr   

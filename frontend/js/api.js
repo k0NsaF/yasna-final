@@ -1,4 +1,5 @@
 const API_URL = "http://localhost:8000/api";
+const USE_MOCK = false;
 
 async function apiRequest(path, options = {}) {
     const response = await fetch(API_URL + path, {
@@ -22,9 +23,18 @@ async function masterRequest(path, options = {}) {
 async function familyRequest(path, options = {}) {
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token') || localStorage.getItem("family_token");
+    
+    // Сохраняем токен, если он пришел в ссылке
+    if (urlParams.get('token')) {
+        localStorage.setItem("family_token", urlParams.get('token'));
+    }
+
     return apiRequest(path, {
         ...options,
-        headers: { ...options.headers, "X-Family-Token": token }
+        headers: { 
+            ...options.headers, 
+            "Authorization": token ? `Bearer ${token}` : "" 
+        }
     });
 }
 

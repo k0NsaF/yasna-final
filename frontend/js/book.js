@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
 async function loadPublicSchedule() {
     const container = document.getElementById('lessons-container');
     try {
-        const lessons = await apiRequest('/lessons');
+        const lessons = await familyRequest('/lessons');
         
         if (!lessons || lessons.length === 0) {
             container.innerHTML = '<p style="text-align: center; color: var(--gray);">Пока нет доступных занятий</p>';
@@ -17,14 +17,14 @@ async function loadPublicSchedule() {
         }
 
         container.innerHTML = lessons.map(l => {
-            const free = l.capacity - l.booked;
+            const free = l.free_places;
             const isFull = free <= 0;
             
             return `
             <div class="card" style="display: flex; justify-content: space-between; align-items: center; opacity: ${isFull ? 0.6 : 1};">
                 <div>
                     <h3 style="margin: 0 0 5px 0;">${l.title}</h3>
-                    <div style="font-size: 14px; color: var(--gray); margin-bottom: 5px;">📅 ${formatDate(l.datetime)}</div>
+                    <div style="font-size: 14px; color: var(--gray); margin-bottom: 5px;">📅 ${formatDate(l.starts_at)}</div>
                     <div style="font-size: 13px;">Свободных мест: <b>${isFull ? 'Нет' : free}</b></div>
                 </div>
                 <button class="btn ${isFull ? 'btn-gray' : ''}" 
@@ -44,23 +44,25 @@ async function startBooking(lessonId, title) {
     selectedLessonId = lessonId;
     document.getElementById('book-lesson-info').innerText = `Занятие: ${title}`;
     
-    // Если мы знаем, кто это (есть токен) - показываем детей
     const token = localStorage.getItem("family_token");
     
-    if (!token && !USE_MOCK) {
-        // Если это публичный юзер, просим персональную ссылку
+    if (!token) {
         openModal('modal-public');
         return;
     }
 
-    // Загружаем детей для выбора
     try {
         childrenData = await familyRequest('/family/children');
         const list = document.getElementById('book-children-list');
         
+        if (!childrenData || childrenData.length === 0) {
+            list.innerHTML = '<p style="color: red;">У вас нет добавленных детей.</p>';
+            return;
+        }
+
         list.innerHTML = childrenData.map(c => `
             <button class="btn ${selectedChildId === c.id ? '' : 'btn-gray'} btn-block" onclick="selectChildForBook(${c.id})">
-                ${c.name}
+                ${c.first_name}
             </button>
         `).join('');
         
@@ -72,7 +74,6 @@ async function startBooking(lessonId, title) {
 
 function selectChildForBook(id) {
     selectedChildId = id;
-    // Обновляем визуал кнопок
     const buttons = document.querySelectorAll('#book-children-list button');
     buttons.forEach((btn, index) => {
         if (childrenData[index].id === id) {
@@ -87,14 +88,14 @@ async function confirmBooking() {
     if (!selectedChildId) return showToast('Выберите ребенка', 'error');
 
     try {
-        const res = await familyRequest('/family/bookings', {
+        await familyRequest('/family/bookings', {
             method: 'POST',
             body: JSON.stringify({ child_id: selectedChildId, lesson_id: selectedLessonId })
         });
         
         closeModal('modal-book');
         showToast('Ребенок успешно записан!');
-        loadPublicSchedule(); // Обновляем список мест
+        loadPublicSchedule();
         
     } catch (e) {
         showToast(e.message, 'error');

@@ -16,10 +16,6 @@
         
         <form id="login-form">
             <div class="form-group">
-                <label>Логин</label>
-                <input type="text" id="login" class="form-input" required placeholder="admin">
-            </div>
-            <div class="form-group">
                 <label>Пароль</label>
                 <input type="password" id="password" class="form-input" required placeholder="••••••">
             </div>
@@ -31,9 +27,19 @@
     <script>
         document.getElementById('login-form').addEventListener('submit', async (e) => {
             e.preventDefault();
+            const password = document.getElementById('password').value;
+            
             try {
-                // Тут будет реальный запрос, а пока просто сохраняем мок-токен
-                localStorage.setItem("master_token", "test-master-token");
+                const response = await fetch("http://localhost:8000/api/master/login", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ password: password })
+                });
+                
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.detail || "Ошибка входа");
+                
+                localStorage.setItem("master_token", data.access_token);
                 window.location.href = "master.html";
             } catch (err) {
                 showToast(err.message, 'error');
